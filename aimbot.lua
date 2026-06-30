@@ -2,7 +2,7 @@ local aimbotEnabled = false
 local chamsEnabled = false
 local isHoldingKey = false
 local aimbotFOV = 150
-local aimbotKey = true
+local aimbotKey = Enum.KeyCode.E
 local panelVisible = true
 local isBinding = false
 
@@ -220,6 +220,22 @@ local function setupLighting()
     colorCorr.Saturation = 0.2
     colorCorr.Contrast = 0.1
 
+    -- Purple Galaxy Sky
+    local Sky = Instance.new("Sky", Lighting)
+    Sky.SkyboxUp = "rbxassetid://159454288"
+    Sky.SkyboxDn = "rbxassetid://159454296"
+    Sky.SkyboxFt = "rbxassetid://159454293"
+    Sky.SkyboxBk = "rbxassetid://159454299"
+    Sky.SkyboxLf = "rbxassetid://159454286"
+    Sky.SkyboxRt = "rbxassetid://159454300"
+    Sky.SunTextureId = "" -- Removes sun for better galaxy look
+
+    Lighting.Ambient = Color3.fromRGB(120, 70, 180)
+    Lighting.OutdoorAmbient = Color3.fromRGB(100, 50, 150)
+    Lighting.Brightness = 2.5
+    Lighting.ClockTime = 20
+    Lighting.ExposureCompensation = 0.5
+end
 
 -- === 2. Optimized Pink Hologram Hands ===
 local function makePinkHands()
