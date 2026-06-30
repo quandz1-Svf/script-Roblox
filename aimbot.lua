@@ -91,6 +91,27 @@ local SnapLine = Drawing.new("Line")
 SnapLine.Thickness = 1
 SnapLine.Visible = false
 
+-- Hàm kiểm tra xem có bị tường che hay không
+local function isVisible(targetPart)
+    local origin = Camera.CFrame.Position
+    local direction = targetPart.Position - origin
+    
+    -- Thiết lập các tham số cho Raycast
+    local raycastParams = RaycastParams.new()
+    -- Bỏ qua nhân vật của bạn và chính Camera/ViewModel
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    
+    -- Bắn một tia từ Camera đến bộ phận của mục tiêu (ví dụ: Đầu)
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    -- Nếu tia không đập trúng vật cản nào (hoặc đập trúng chính nhân vật mục tiêu), nghĩa là nhìn thấy được
+    if not raycastResult or raycastResult.Instance:IsDescendantOf(targetPart.Parent) then
+        return true
+    end
+    return false -- Bị tường che
+end
+
 --------------------------------------------------------------------
 -- RAINBOW LOGIC
 --------------------------------------------------------------------
