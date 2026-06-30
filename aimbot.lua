@@ -149,7 +149,7 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- Aimbot Update
-    if aimbotEnabled and then
+    if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
