@@ -1,242 +1,306 @@
---[[
-  Скрипт: Aimbot, ESP, Lag Fix (Мобильная оптимизация)
-  GUI интегрирован с kyrilib.dev
-  Автор: palofsc
-  Версия: 1.0
---]]
+-- Script taken from https://xenoscripts.com website --
 
--- ===== НАСТРОЙКИ =====
-local FOV_RADIUS = 90          -- Радиус FOV для Aimbot (регулируется)
-local ESP_ENABLED = true       -- Включить/выключить ESP
-local AIMBOT_ENABLED = true    -- Включить/выключить Aimbot
-local LAG_FIX_ENABLED = true   -- Включить/выключить Lag Fix
-local TEAM_CHECK = true        -- Проверка по командам
-local SMOOTHING = 3            -- Сглаживание прицела
+local aimbotEnabled = false
+local chamsEnabled = false
+local isHoldingKey = false
+local aimbotFOV = 150
+local aimbotKey = Enum.KeyCode.E
+local panelVisible = true
+local isBinding = false
 
--- ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
 
--- ===== ФУНКЦИЯ ESP =====
-local function ESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            local char = player.Character
-            if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") then
-                -- Проверка на существование BillboardGui
-                local bill = char:FindFirstChild("ESPLabel")
-                if not bill then
-                    bill = Instance.new("BillboardGui")
-                    bill.Name = "ESPLabel"
-                    bill.Adornee = char.Head
-                    bill.Size = UDim2.new(0, 100, 0, 50)
-                    bill.StudsOffset = Vector3.new(0, 2.5, 0)
-                    bill.AlwaysOnTop = true
-                    
-                    local label = Instance.new("TextLabel")
-                    label.Size = UDim2.new(1, 0, 1, 0)
-                    label.BackgroundTransparency = 1
-                    label.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    label.TextStrokeTransparency = 0
-                    label.Text = player.Name
-                    label.Parent = bill
-                    
-                    bill.Parent = char
-                end
-            end
-        end
-    end
+--------------------------------------------------------------------
+-- UI Creation (Rainbow Themed)
+--------------------------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+local MainPanel = Instance.new("Frame", ScreenGui)
+local MainCorner = Instance.new("UICorner", MainPanel)
+local MainStroke = Instance.new("UIStroke", MainPanel)
+
+local ToggleBtn = Instance.new("TextButton", MainPanel)
+local ChamsBtn = Instance.new("TextButton", MainPanel)
+local BindBtn = Instance.new("TextButton", MainPanel)
+local FOVInput = Instance.new("TextBox", MainPanel)
+local CloseBtn = Instance.new("TextButton", MainPanel)
+local Title = Instance.new("TextLabel", MainPanel)
+local SubTitle = Instance.new("TextLabel", MainPanel) -- The "Open/Close with Z" text
+
+-- Style Panel
+MainPanel.Size = UDim2.new(0, 200, 0, 240) -- Adjusted height for the new text
+MainPanel.Position = UDim2.new(0.5, -100, 0.4, 0)
+MainPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainPanel.BorderSizePixel = 0
+MainPanel.Active = true
+MainPanel.Draggable = true 
+
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainStroke.Thickness = 2
+MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Position = UDim2.new(0, 0, 0, 5)
+Title.Text = "RAINBOW V2"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.BackgroundTransparency = 1
+
+SubTitle.Size = UDim2.new(1, 0, 0, 15)
+SubTitle.Position = UDim2.new(0, 0, 0, 25)
+SubTitle.Text = "[ Open/Close with Z ]"
+SubTitle.Font = Enum.Font.GothamSemibold
+SubTitle.TextSize = 10
+SubTitle.BackgroundTransparency = 1
+
+local function StyleRainbowButton(btn, pos, text)
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Position = UDim2.new(0.05, 0, 0, pos)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    btn.Text = text
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 12
+    local corner = Instance.new("UICorner", btn)
+    corner.CornerRadius = UDim.new(0, 4)
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Thickness = 1
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    return stroke
 end
 
--- ===== ФУНКЦИЯ AIMBOT =====
-local function GetClosestPlayerInFOV(fovRadius)
-    local closestPlayer = nil
-    local shortestDistance = fovRadius or FOV_RADIUS
-    
-    -- Получаем позицию экрана локального игрока
-    local myPos = Camera:WorldToViewportPoint(LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") and LocalPlayer.Character.Head.Position or Vector3.new(0,0,0))
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            local char = player.Character
-            if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") and char.Humanoid.Health > 0 then
-                -- Проверка по командам (опционально)
-                if TEAM_CHECK and player.Team == LocalPlayer.Team then
-                    continue
-                end
-                
-                local headPos = Camera:WorldToViewportPoint(char.Head.Position)
-                local distance = (Vector2.new(headPos.X, headPos.Y) - Vector2.new(myPos.X, myPos.Y)).Magnitude
-                
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    closestPlayer = player
-                end
-            end
-        end
-    end
-    
-    return closestPlayer
-end
+local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
+local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Pink Chams: OFF")
+local BindStroke = StyleRainbowButton(BindBtn, 135, "Bind: " .. aimbotKey.Name)
+local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
 
-local function Aimbot()
-    if not AIMBOT_ENABLED then return end
-    
-    local target = GetClosestPlayerInFOV(FOV_RADIUS)
-    if target and target.Character and target.Character:FindFirstChild("Head") then
-        local headPos = target.Character.Head.Position
-        local camPos = Camera.CFrame.Position
-        local lookAt = CFrame.new(camPos, headPos)
-        
-        -- Применение сглаживания
-        if SMOOTHING > 0 then
-            Camera.CFrame = Camera.CFrame:Lerp(lookAt, 1 / SMOOTHING)
-        else
-            Camera.CFrame = lookAt
-        end
-    end
-end
+CloseBtn.Size = UDim2.new(0, 20, 0, 20)
+CloseBtn.Position = UDim2.new(1, -25, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1, 0)
 
--- ===== ФУНКЦИЯ LAG FIX =====
-local function LagFix()
-    if not LAG_FIX_ENABLED then return end
-    
-    -- Очистка ненужных объектов
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-            obj:Destroy()
-        end
-    end
-    
-    -- Отключение графических эффектов
-    settings().Rendering.QualityLevel = 1
-    settings().Rendering.EnableFRM = false
-    settings().Rendering.ClampFRate = true
-    
-    -- Очистка мусора
-    game:GetService("Debris"):ClearAll()
-end
+-- Drawings
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.Filled = false      
+FOVCircle.NumSides = 64        
+FOVCircle.Transparency = 1     
+FOVCircle.Visible = false
 
--- ===== ЗАГРУЗКА GUI =====
-local function LoadGUI()
-    local success, result = pcall(function()
-        -- Попытка загрузить GUI с указанного сайта
-        local guiModule = loadstring(game:HttpGet("https://kyrilib.dev/gui.lua"))()
-        return guiModule
-    end)
-    
-    if not success then
-        -- Если не удалось загрузить с сайта, создаем локальный GUI
-        local ScreenGui = Instance.new("ScreenGui")
-        ScreenGui.Name = "KyrilibGUI"
-        ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-        
-        local Frame = Instance.new("Frame")
-        Frame.Size = UDim2.new(0, 200, 0, 150)
-        Frame.Position = UDim2.new(0.5, -100, 0.5, -75)
-        Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        Frame.BorderSizePixel = 0
-        Frame.Parent = ScreenGui
-        
-        -- Заголовок
-        local Title = Instance.new("TextLabel")
-        Title.Size = UDim2.new(1, 0, 0, 25)
-        Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Title.Text = "kyrilib.dev GUI"
-        Title.Parent = Frame
-        
-        -- Кнопка Aimbot
-        local AimbotBtn = Instance.new("TextButton")
-        AimbotBtn.Size = UDim2.new(1, -20, 0, 25)
-        AimbotBtn.Position = UDim2.new(0, 10, 0, 35)
-        AimbotBtn.Text = "Aimbot: ON"
-        AimbotBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        AimbotBtn.Parent = Frame
-        AimbotBtn.MouseButton1Click:Connect(function()
-            AIMBOT_ENABLED = not AIMBOT_ENABLED
-            AimbotBtn.Text = "Aimbot: " .. (AIMBOT_ENABLED and "ON" or "OFF")
-            AimbotBtn.BackgroundColor3 = AIMBOT_ENABLED and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-        end)
-        
-        -- Кнопка ESP
-        local ESPBtn = Instance.new("TextButton")
-        ESPBtn.Size = UDim2.new(1, -20, 0, 25)
-        ESPBtn.Position = UDim2.new(0, 10, 0, 65)
-        ESPBtn.Text = "ESP: ON"
-        ESPBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        ESPBtn.Parent = Frame
-        ESPBtn.MouseButton1Click:Connect(function()
-            ESP_ENABLED = not ESP_ENABLED
-            ESPBtn.Text = "ESP: " .. (ESP_ENABLED and "ON" or "OFF")
-            ESPBtn.BackgroundColor3 = ESP_ENABLED and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-        end)
-        
-        -- Кнопка Lag Fix
-        local LagFixBtn = Instance.new("TextButton")
-        LagFixBtn.Size = UDim2.new(1, -20, 0, 25)
-        LagFixBtn.Position = UDim2.new(0, 10, 0, 95)
-        LagFixBtn.Text = "Lag Fix: ON"
-        LagFixBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        LagFixBtn.Parent = Frame
-        LagFixBtn.MouseButton1Click:Connect(function()
-            LAG_FIX_ENABLED = not LAG_FIX_ENABLED
-            LagFixBtn.Text = "Lag Fix: " .. (LAG_FIX_ENABLED and "ON" or "OFF")
-            LagFixBtn.BackgroundColor3 = LAG_FIX_ENABLED and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-        end)
-        
-        -- Слайдер FOV
-        local FOVSlider = Instance.new("TextBox")
-        FOVSlider.Size = UDim2.new(0, 60, 0, 20)
-        FOVSlider.Position = UDim2.new(1, -70, 0, 125)
-        FOVSlider.Text = tostring(FOV_RADIUS)
-        FOVSlider.Parent = Frame
-        FOVSlider.FocusLost:Connect(function()
-            local num = tonumber(FOVSlider.Text)
-            if num then
-                FOV_RADIUS = math.clamp(num, 10, 360)
-            end
-        end)
-        
-        local FOVLabel = Instance.new("TextLabel")
-        FOVLabel.Size = UDim2.new(0, 100, 0, 20)
-        FOVLabel.Position = UDim2.new(0, 10, 0, 125)
-        FOVLabel.Text = "FOV Radius:"
-        FOVLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        FOVLabel.BackgroundTransparency = 1
-        FOVLabel.Parent = Frame
-    end
-end
 
--- ===== ГЛАВНЫЙ ЦИКЛ =====
-LoadGUI()
+local SnapLine = Drawing.new("Line")
+SnapLine.Thickness = 1
+SnapLine.Visible = false
 
+--------------------------------------------------------------------
+-- RAINBOW LOGIC
+--------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
-    if ESP_ENABLED then
-        ESP()
+    local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
+    
+    -- Sync all UI elements to Rainbow
+    MainStroke.Color = rainbow
+    Title.TextColor3 = rainbow
+    SubTitle.TextColor3 = rainbow -- Rainbow Subtitle
+    ToggleStroke.Color = rainbow
+    ToggleBtn.TextColor3 = rainbow
+    ChamsStroke.Color = rainbow
+    ChamsBtn.TextColor3 = rainbow
+    BindStroke.Color = rainbow
+    BindBtn.TextColor3 = rainbow
+    FOVStroke.Color = rainbow
+    FOVInput.TextColor3 = rainbow
+    
+    -- Drawing Rainbows
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FOVCircle.Radius = aimbotFOV
+    FOVCircle.Color = rainbow
+    SnapLine.Color = rainbow
+
+    -- Chams Update
+    if chamsEnabled then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                local h = p.Character:FindFirstChild("ShinyPink") or Instance.new("Highlight", p.Character)
+                h.Name = "ShinyPink"
+                h.FillColor = Color3.fromRGB(255, 105, 180)
+                h.OutlineColor = Color3.new(1, 1, 1)
+                h.Enabled = true
+            end
+        end
     end
-    if AIMBOT_ENABLED then
-        Aimbot()
+
+    -- Aimbot Update
+    if aimbotEnabled and isHoldingKey then
+        local target = nil
+        local dist = aimbotFOV
+        local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+                local head = p.Character.Head
+                local pos, screen = Camera:WorldToViewportPoint(head.Position)
+                if screen then
+                    local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if mDist < dist then dist = mDist target = head end
+                end
+            end
+        end
+        
+        if target then
+            local pos = Camera:WorldToViewportPoint(target.Position)
+            SnapLine.From = center
+            SnapLine.To = Vector2.new(pos.X, pos.Y)
+            SnapLine.Visible = true
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        else SnapLine.Visible = false end
+    else SnapLine.Visible = false end
+end)
+
+--------------------------------------------------------------------
+-- INTERACTIONS
+--------------------------------------------------------------------
+ToggleBtn.MouseButton1Click:Connect(function()
+    aimbotEnabled = not aimbotEnabled
+    ToggleBtn.Text = aimbotEnabled and "Aimbot: ON" or "Aimbot: OFF"
+    FOVCircle.Visible = aimbotEnabled
+end)
+
+ChamsBtn.MouseButton1Click:Connect(function()
+    chamsEnabled = not chamsEnabled
+    ChamsBtn.Text = chamsEnabled and "Pink Chams: ON" or "Pink Chams: OFF"
+end)
+
+BindBtn.MouseButton1Click:Connect(function() isBinding = true BindBtn.Text = "..." end)
+CloseBtn.MouseButton1Click:Connect(function() MainPanel.Visible = false end)
+FOVInput.FocusLost:Connect(function() aimbotFOV = tonumber(FOVInput.Text) or 150 end)
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if isBinding then aimbotKey = input.KeyCode BindBtn.Text = "Bind: "..aimbotKey.Name isBinding = false return end
+    if not gp then
+        if input.KeyCode == aimbotKey then isHoldingKey = true 
+        elseif input.KeyCode == Enum.KeyCode.Z then 
+            panelVisible = not panelVisible 
+            MainPanel.Visible = panelVisible 
+        end
     end
 end)
 
--- Запуск Lag Fix при старте
-if LAG_FIX_ENABLED then
-    LagFix()
-end
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == aimbotKey then isHoldingKey = false SnapLine.Visible = false end
+end)
+--[[
+	IMPROVED COUNTER BLOX VISUALS
+	- Hologram Pink Hands (Neon + Bloom)
+	- Enhanced Galaxy Skybox
+	- Optimized Pink HUD
+]]
 
--- Периодическая очистка
-coroutine.wrap(function()
-    while true do
-        wait(10)
-        if LAG_FIX_ENABLED then
-            LagFix()
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+
+-- === 1. Enhanced Lighting & Glow ===
+local function setupLighting()
+    -- Clear existing effects to prevent stacking
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("Sky") or v:IsA("Clouds") or v:IsA("BloomEffect") then
+            v:Destroy()
         end
     end
-end)()
 
-print("Script loaded successfully - kyrilib.dev integration complete")
+    -- Bloom makes Neon pink hands actually GLOW
+    local bloom = Instance.new("BloomEffect", Lighting)
+    bloom.Intensity = 1.2
+    bloom.Size = 24
+    bloom.Threshold = 0.8
+
+    local colorCorr = Instance.new("ColorCorrectionEffect", Lighting)
+    colorCorr.Saturation = 0.2
+    colorCorr.Contrast = 0.1
+
+    -- Purple Galaxy Sky
+    local Sky = Instance.new("Sky", Lighting)
+    Sky.SkyboxUp = "rbxassetid://159454288"
+    Sky.SkyboxDn = "rbxassetid://159454296"
+    Sky.SkyboxFt = "rbxassetid://159454293"
+    Sky.SkyboxBk = "rbxassetid://159454299"
+    Sky.SkyboxLf = "rbxassetid://159454286"
+    Sky.SkyboxRt = "rbxassetid://159454300"
+    Sky.SunTextureId = "" -- Removes sun for better galaxy look
+
+    Lighting.Ambient = Color3.fromRGB(120, 70, 180)
+    Lighting.OutdoorAmbient = Color3.fromRGB(100, 50, 150)
+    Lighting.Brightness = 2.5
+    Lighting.ClockTime = 20
+    Lighting.ExposureCompensation = 0.5
+end
+
+-- === 2. Optimized Pink Hologram Hands ===
+local function makePinkHands()
+    -- Search for viewmodel (different games name it differently)
+    local viewModel = Camera:FindFirstChild("ViewModel") 
+        or Camera:FindFirstChild("Arms") 
+        or Camera:FindFirstChildWhichIsA("Model")
+    
+    if not viewModel then return end
+
+    for _, part in pairs(viewModel:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local lname = part.Name:lower()
+            -- Apply to hands, arms, and sleeves
+            if lname:find("hand") or lname:find("arm") or lname:find("glass") or lname:find("sleeve") then
+                part.Material = Enum.Material.Neon
+                part.Color = Color3.fromRGB(255, 105, 180)
+                part.Transparency = 0.3 -- Better hologram look
+                part.Reflectance = 0
+                -- Remove textures (like gloves) to show the glow
+                if part:FindFirstChildWhichIsA("Texture") then
+                    part:FindFirstChildWhichIsA("Texture"):Destroy()
+                end
+            end
+        end
+    end
+end
+
+-- === 3. Optimized Pink HUD ===
+local function updateHUD(gui)
+    local pinkColor = Color3.fromRGB(255, 105, 180)
+    for _, obj in pairs(gui:GetDescendants()) do
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+            obj.TextColor3 = pinkColor
+        elseif obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+            obj.ImageColor3 = pinkColor
+        end
+    end
+end
+
+-- Update HUD when player spawns/resets
+local function fullHUDUpdate()
+    task.wait(1) -- Wait for HUD to load
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    for _, gui in pairs(playerGui:GetChildren()) do
+        updateHUD(gui)
+    end
+end
+
+-- === Execution ===
+setupLighting()
+RunService.RenderStepped:Connect(makePinkHands)
+
+LocalPlayer.CharacterAdded:Connect(fullHUDUpdate)
+LocalPlayer.PlayerGui.ChildAdded:Connect(function(child)
+    task.wait(0.1)
+    updateHUD(child)
+end)
+
+-- Initial HUD check
+fullHUDUpdate()
+
+print("Improved Visuals Loaded!")
