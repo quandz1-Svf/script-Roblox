@@ -3,7 +3,7 @@
 -- Вставьте в Executor. Запуск: локальный скрипт (LocalScript) в StarterGui или оттуда, где доступен game.Players.LocalPlayer.
 
 -- 1) ИНИЦИАЛИЗАЦИЯ RAYFIELD
-local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Rayfield/main/source.lua"))()
+local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Rayfield/refs/heads/main/source"))()
 local Window = Rayfield:CreateWindow({
    Name = "Palo Suite",
    LoadingTitle = "Загрузка...",
