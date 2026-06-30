@@ -158,13 +158,17 @@ RunService.RenderStepped:Connect(function()
 
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-                local head = p.Character.Head
-                local pos, screen = Camera:WorldToViewportPoint(head.Position)
-                if screen then
-                    local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                    if mDist < dist then dist = mDist target = head end
-                end
-            end
+    local head = p.Character.Head
+    local pos, screen = Camera:WorldToViewportPoint(head.Position)
+    if screen then
+        -- Thêm điều kiện isVisible(head) ở đây
+        if isVisible(head) then 
+            local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+            if mDist < dist then dist = mDist target = head end
+        end
+    end
+end
+
         end
         
         if target then
