@@ -26,7 +26,7 @@ local Title = Instance.new("TextLabel", MainPanel)
 local SubTitle = Instance.new("TextLabel", MainPanel)
 
 -- Style Panel
-MainPanel.Size = UDim2.new(0, 200, 0, 240)
+MainPanel.Size = UDim2.new(0, 200, 0, 185)
 MainPanel.Position = UDim2.new(0.5, -100, 0.4, 0)
 MainPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainPanel.BorderSizePixel = 0
@@ -69,7 +69,7 @@ end
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
 local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Pink Chams: OFF")
 local BindStroke = StyleRainbowButton(BindBtn, 135, "Auto Mode Active")
-local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
+local FOVStroke = StyleRainbowButton(FOVInput, 135, tostring(aimbotFOV))
 
 -- Ẩn nút Bind đi vì không cần gán phím nữa
 BindBtn.Visible = false
