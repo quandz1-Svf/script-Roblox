@@ -1,5 +1,3 @@
--- Script taken from https://xenoscripts.com website --
-
 local aimbotEnabled = false
 local chamsEnabled = false
 local isHoldingKey = false
@@ -85,8 +83,7 @@ Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1, 0)
 
 -- Drawings
 local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 2
-FOVCircle.Filled = false          
+FOVCircle.Thickness = 2     
 FOVCircle.Visible = false
 
 
