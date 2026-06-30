@@ -1,5 +1,6 @@
 local aimbotEnabled = false
 local chamsEnabled = false
+local isHoldingKey = false
 local aimbotFOV = 150
 local aimbotKey = Enum.KeyCode.E
 local panelVisible = true
