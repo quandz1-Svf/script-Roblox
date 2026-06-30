@@ -85,7 +85,7 @@ Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1, 0)
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2     
 FOVCircle.Visible = false
-
+FOVCircle.Filled = false
 
 local SnapLine = Drawing.new("Line")
 SnapLine.Thickness = 1
