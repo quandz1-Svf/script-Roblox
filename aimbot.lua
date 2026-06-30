@@ -2,7 +2,6 @@ local aimbotEnabled = false
 local chamsEnabled = false
 local isHoldingKey = false
 local aimbotFOV = 150
-local aimbotKey = Enum.KeyCode.E
 local panelVisible = true
 local isBinding = false
 
@@ -71,7 +70,6 @@ end
 
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
 local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Pink Chams: OFF")
-local BindStroke = StyleRainbowButton(BindBtn, 135, "Bind: " .. aimbotKey.Name)
 local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
 
 CloseBtn.Size = UDim2.new(0, 20, 0, 20)
@@ -130,7 +128,7 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- Aimbot Update
-    if aimbotEnabled and isHoldingKey then
+    if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
