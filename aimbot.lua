@@ -1,29 +1,25 @@
--- Roblox Script: ESP + Aimbot + FOV + Lag Fix + WindUI (ИСПРАВЛЕННАЯ ЗАГРУЗКА)
+-- Roblox Script: ESP + Aimbot + FOV + Lag Fix + KyriLib (https://kyrilib.dev)
 -- Made by palofsc (palo)
--- Ошибка "Instance expected" возникает из-за неправильной загрузки WindUI. Исправлено через loadstring с корректным URL.
+-- Используется KyriLib. Загрузка библиотеки, создание окна и всех элементов.
 
--- 1) ПРАВИЛЬНАЯ ЗАГРУЗКА WINDUI (через loadstring, а не require)
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main_example.lua"))()
--- Если выше не работает, используйте прямую ссылку на исходник:
--- local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua"))()
+-- 1) ЗАГРУЗКА KYRILIB
+local kyri = loadstring(game:HttpGet("https://kyrilib.dev/kyrilib/"))()
 
--- Проверка загрузки
-if not WindUI then
-    error("WindUI не загружен. Проверьте ссылку или интернет-соединение.")
-end
-
--- 2) СОЗДАНИЕ ОКНА (синтаксис WindUI)
-local Window = WindUI:CreateWindow({
-    Name = "Palo Suite",
-    Size = UDim2.new(0, 500, 0, 400),
-    Theme = "Dark"
+-- 2) СОЗДАНИЕ ОКНА
+local w = kyri.new("Palo Suite", {
+    GameName = "PaloHub",
+    AutoLoad = "default"
 })
 
-local MainTab = Window:CreateTab("Основное")
-local VisualTab = Window:CreateTab("Визуал")
-local AimbotTab = Window:CreateTab("Aimbot")
+-- Если окно не создалось (например, ошибка ключа), остановить скрипт
+if not w then return end
 
--- 3) ПЕРЕМЕННЫЕ
+-- 3) СОЗДАНИЕ ВКЛАДОК
+local mainTab = w:tab("Основное", "sliders")
+local visualTab = w:tab("Визуал", "eye")
+local aimbotTab = w:tab("Aimbot", "crosshair")
+
+-- 4) ПЕРЕМЕННЫЕ
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -39,7 +35,7 @@ local AimbotSmoothness = 0.3
 local AimbotPart = "Head"
 local LagFixEnabled = false
 
--- 4) ESP
+-- 5) ESP (BOX + NAME + DISTANCE)
 local ESPObjects = {}
 local function CreateESP(plr)
    if plr == LocalPlayer then return end
@@ -86,13 +82,13 @@ local function UpdateESP()
    end
 end
 
--- 5) FOV
+-- 6) FOV ОКРУЖНОСТЬ
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = false; FOVCircle.Radius = FOVRadius; FOVCircle.Thickness = 1
 FOVCircle.Color = Color3.new(1,1,1); FOVCircle.Filled = false; FOVCircle.NumSides = 64
 FOVCircle.Position = Camera.ViewportSize / 2
 
--- 6) AIMBOT
+-- 7) AIMBOT
 local function GetClosestTarget()
    local closest = nil; local minDist = FOVRadius
    local mousePos = UserInputService:GetMouseLocation()
@@ -124,7 +120,7 @@ local function AimbotLoop()
    end
 end
 
--- 7) LAG FIX
+-- 8) LAG FIX
 local function LagFix()
    if LagFixEnabled then
       settings().Rendering.QualityLevel = 1
@@ -142,65 +138,44 @@ local function LagFix()
    end
 end
 
--- 8) GUI ЭЛЕМЕНТЫ (синтаксис WindUI)
-MainTab:CreateToggle({
-   Name = "ESP",
-   CurrentValue = false,
-   Callback = function(v) ESPEnabled = v
-      if v then for _, plr in pairs(Players:GetPlayers()) do CreateESP(plr) end
-      else for _, obj in pairs(ESPObjects) do obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false end
+-- 9) ЭЛЕМЕНТЫ GUI (СИНТАКСИС KYRILIB)
+mainTab:section("Основные переключатели")
+
+mainTab:toggle("ESP", false, function(v)
+   ESPEnabled = v
+   if v then
+      for _, plr in pairs(Players:GetPlayers()) do CreateESP(plr) end
+   else
+      for _, obj in pairs(ESPObjects) do
+         obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false
       end
    end
-})
+end, "esp_toggle")
 
-MainTab:CreateToggle({
-   Name = "Aimbot",
-   CurrentValue = false,
-   Callback = function(v) AimbotEnabled = v end
-})
+mainTab:toggle("Aimbot", false, function(v) AimbotEnabled = v end, "aimbot_toggle")
+mainTab:toggle("Lag Fix (отключить эффекты)", false, function(v) LagFixEnabled = v; LagFix() end, "lagfix_toggle")
+mainTab:toggle("Team Check (игнорировать союзников)", false, function(v) TeamCheck = v end, "teamcheck_toggle")
 
-MainTab:CreateToggle({
-   Name = "Lag Fix",
-   CurrentValue = false,
-   Callback = function(v) LagFixEnabled = v; LagFix() end
-})
+mainTab:space()
+mainTab:section("Настройки Aimbot")
 
-MainTab:CreateToggle({
-   Name = "Team Check",
-   CurrentValue = false,
-   Callback = function(v) TeamCheck = v end
-})
+aimbotTab:slider("Радиус FOV", 50, 400, FOVRadius, function(v)
+   FOVRadius = v; FOVCircle.Radius = v
+end, "fov_radius")
 
-VisualTab:CreateSlider({
-   Name = "FOV Radius",
-   Min = 50,
-   Max = 400,
-   Default = FOVRadius,
-   Callback = function(v) FOVRadius = v; FOVCircle.Radius = v end
-})
+aimbotTab:slider("Сглаживание (0-1)", 0, 1, AimbotSmoothness, function(v)
+   AimbotSmoothness = v
+end, "smoothness")
 
-VisualTab:CreateToggle({
-   Name = "Show FOV",
-   CurrentValue = true,
-   Callback = function(v) ShowFOV = v; FOVCircle.Visible = v end
-})
+aimbotTab:dropdown("Часть тела", {"Head", "HumanoidRootPart", "Torso"}, "Head", function(v)
+   AimbotPart = v
+end, "aim_part")
 
-AimbotTab:CreateSlider({
-   Name = "Smoothness",
-   Min = 0,
-   Max = 1,
-   Default = AimbotSmoothness,
-   Callback = function(v) AimbotSmoothness = v end
-})
+visualTab:toggle("Показывать FOV круг", true, function(v)
+   ShowFOV = v; FOVCircle.Visible = v
+end, "show_fov")
 
-AimbotTab:CreateDropdown({
-   Name = "Target Part",
-   Options = {"Head", "HumanoidRootPart", "Torso"},
-   Default = "Head",
-   Callback = function(v) AimbotPart = v end
-})
-
--- 9) ОБНОВЛЕНИЯ
+-- 10) ОБНОВЛЕНИЯ
 Players.PlayerAdded:Connect(function(plr)
    plr.CharacterAdded:Connect(function() if ESPEnabled then CreateESP(plr) end end)
    if ESPEnabled then CreateESP(plr) end
@@ -228,4 +203,4 @@ for _, plr in pairs(Players:GetPlayers()) do
    if plr ~= LocalPlayer then CreateESP(plr) end
 end
 
-print("Palo Suite [WindUI] загружен. Ошибка require исправлена.")
+w:notify("Загрузка", "Palo Suite с KyriLib загружен", 3)
