@@ -1,8 +1,6 @@
 local aimbotEnabled = false
 local chamsEnabled = false
-local isHoldingKey = false
 local aimbotFOV = 150
-local aimbotKey = Enum.KeyCode.E
 local panelVisible = true
 local isBinding = false
 
@@ -151,7 +149,7 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- Aimbot Update
-    if aimbotEnabled and true then
+    if aimbotEnabled and then
         local target = nil
         local dist = aimbotFOV
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
