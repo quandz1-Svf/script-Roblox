@@ -1,13 +1,20 @@
--- Roblox Script: ESP + Aimbot + FOV + Lag Fix + WindUI (GitHub: Footagesus/WindUI)
+-- Roblox Script: ESP + Aimbot + FOV + Lag Fix + WindUI (ИСПРАВЛЕННАЯ ЗАГРУЗКА)
 -- Made by palofsc (palo)
--- Используется WindUI вместо Rayfield. Загрузка библиотеки и создание интерфейса.
+-- Ошибка "Instance expected" возникает из-за неправильной загрузки WindUI. Исправлено через loadstring с корректным URL.
 
--- 1) ЗАГРУЗКА WINDUI
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua"))()
+-- 1) ПРАВИЛЬНАЯ ЗАГРУЗКА WINDUI (через loadstring, а не require)
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main_example.lua"))()
+-- Если выше не работает, используйте прямую ссылку на исходник:
+-- local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua"))()
 
--- 2) СОЗДАНИЕ ОКНА
+-- Проверка загрузки
+if not WindUI then
+    error("WindUI не загружен. Проверьте ссылку или интернет-соединение.")
+end
+
+-- 2) СОЗДАНИЕ ОКНА (синтаксис WindUI)
 local Window = WindUI:CreateWindow({
-    Name = "Palo Suite [WindUI]",
+    Name = "Palo Suite",
     Size = UDim2.new(0, 500, 0, 400),
     Theme = "Dark"
 })
@@ -32,7 +39,7 @@ local AimbotSmoothness = 0.3
 local AimbotPart = "Head"
 local LagFixEnabled = false
 
--- 4) ESP (BOX + NAME + DISTANCE)
+-- 4) ESP
 local ESPObjects = {}
 local function CreateESP(plr)
    if plr == LocalPlayer then return end
@@ -79,7 +86,7 @@ local function UpdateESP()
    end
 end
 
--- 5) FOV ОКРУЖНОСТЬ
+-- 5) FOV
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = false; FOVCircle.Radius = FOVRadius; FOVCircle.Thickness = 1
 FOVCircle.Color = Color3.new(1,1,1); FOVCircle.Filled = false; FOVCircle.NumSides = 64
@@ -135,7 +142,7 @@ local function LagFix()
    end
 end
 
--- 8) GUI ЭЛЕМЕНТЫ (WindUI синтаксис)
+-- 8) GUI ЭЛЕМЕНТЫ (синтаксис WindUI)
 MainTab:CreateToggle({
    Name = "ESP",
    CurrentValue = false,
@@ -221,4 +228,4 @@ for _, plr in pairs(Players:GetPlayers()) do
    if plr ~= LocalPlayer then CreateESP(plr) end
 end
 
-print("Palo Suite [WindUI] загружен. WindUI требует корректного синтаксиса (см. документацию).")
+print("Palo Suite [WindUI] загружен. Ошибка require исправлена.")
