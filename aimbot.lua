@@ -70,7 +70,6 @@ end
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
 local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Pink Chams: OFF")
 local BindStroke = StyleRainbowButton(BindBtn, 135, "Bind: " .. aimbotKey.Name)
-BindBtn.Visible = false
 local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
 
 CloseBtn.Size = UDim2.new(0, 20, 0, 20)
