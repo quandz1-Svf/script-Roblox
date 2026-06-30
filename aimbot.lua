@@ -200,17 +200,14 @@ FOVInput.FocusLost:Connect(function() aimbotFOV = tonumber(FOVInput.Text) or 150
 UserInputService.InputBegan:Connect(function(input, gp)
     if isBinding then aimbotKey = input.KeyCode BindBtn.Text = "Bind: "..aimbotKey.Name isBinding = false return end
     if not gp then
-        if input.KeyCode == aimbotKey then isHoldingKey = true 
-        elseif input.KeyCode == Enum.KeyCode.Z then 
-            panelVisible = not panelVisible 
-            MainPanel.Visible = panelVisible 
-        end
+    if input.KeyCode == Enum.KeyCode.Z then 
+        panelVisible = not panelVisible 
+        MainPanel.Visible = panelVisible 
     end
+end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == aimbotKey then isHoldingKey = false SnapLine.Visible = false end
-end)
+
 --[[
 	IMPROVED COUNTER BLOX VISUALS
 	- Hologram Pink Hands (Neon + Bloom)
