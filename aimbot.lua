@@ -1,21 +1,22 @@
--- Roblox Script: ESP + Aimbot + FOV + Lag Fix + Rayfield GUI
+-- Roblox Script: ESP + Aimbot + FOV + Lag Fix + WindUI (GitHub: Footagesus/WindUI)
 -- Made by palofsc (palo)
--- Вставьте в Executor. Запуск: локальный скрипт (LocalScript) в StarterGui или оттуда, где доступен game.Players.LocalPlayer.
+-- Используется WindUI вместо Rayfield. Загрузка библиотеки и создание интерфейса.
 
--- 1) ИНИЦИАЛИЗАЦИЯ RAYFIELD
-local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Rayfield/refs/heads/main/source"))()
-local Window = Rayfield:CreateWindow({
-   Name = "Palo Suite",
-   LoadingTitle = "Загрузка...",
-   LoadingSubtitle = "by palofsc",
-   ConfigurationSaving = { Enabled = true, FolderName = "PaloHub", FileName = "Config" }
+-- 1) ЗАГРУЗКА WINDUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua"))()
+
+-- 2) СОЗДАНИЕ ОКНА
+local Window = WindUI:CreateWindow({
+    Name = "Palo Suite [WindUI]",
+    Size = UDim2.new(0, 500, 0, 400),
+    Theme = "Dark"
 })
 
 local MainTab = Window:CreateTab("Основное")
 local VisualTab = Window:CreateTab("Визуал")
 local AimbotTab = Window:CreateTab("Aimbot")
 
--- 2) ПЕРЕМЕННЫЕ НАСТРОЕК
+-- 3) ПЕРЕМЕННЫЕ
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -29,39 +30,27 @@ local TeamCheck = false
 local ShowFOV = true
 local AimbotSmoothness = 0.3
 local AimbotPart = "Head"
+local LagFixEnabled = false
 
--- 3) ESP (Box + Name + Distance)
+-- 4) ESP (BOX + NAME + DISTANCE)
 local ESPObjects = {}
 local function CreateESP(plr)
    if plr == LocalPlayer then return end
    local char = plr.Character
    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
    local box = Drawing.new("Square")
-   box.Thickness = 1
-   box.Filled = false
-   box.Color = Color3.new(1,0,0)
-   box.Transparency = 1
+   box.Thickness = 1; box.Filled = false; box.Color = Color3.new(1,0,0); box.Transparency = 1
    local name = Drawing.new("Text")
-   name.Size = 14
-   name.Center = true
-   name.Color = Color3.new(1,1,1)
-   name.Outline = true
-   name.OutlineColor = Color3.new(0,0,0)
+   name.Size = 14; name.Center = true; name.Color = Color3.new(1,1,1); name.Outline = true; name.OutlineColor = Color3.new(0,0,0)
    local dist = Drawing.new("Text")
-   dist.Size = 12
-   dist.Center = true
-   dist.Color = Color3.new(0,1,0)
-   dist.Outline = true
-   dist.OutlineColor = Color3.new(0,0,0)
+   dist.Size = 12; dist.Center = true; dist.Color = Color3.new(0,1,0); dist.Outline = true; dist.OutlineColor = Color3.new(0,0,0)
    ESPObjects[plr] = {box = box, name = name, dist = dist}
 end
 
 local function UpdateESP()
    for plr, obj in pairs(ESPObjects) do
       if not plr or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") or not ESPEnabled then
-         obj.box.Visible = false
-         obj.name.Visible = false
-         obj.dist.Visible = false
+         obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false
          continue
       end
       local root = plr.Character.HumanoidRootPart
@@ -79,34 +68,26 @@ local function UpdateESP()
          obj.dist.Text = distance .. " м"
          obj.dist.Position = Vector2.new(x, y + size*0.75 + 15)
          obj.dist.Visible = true
-         -- Цвет команды (если TeamCheck)
          if TeamCheck and plr.Team == LocalPlayer.Team then
             obj.box.Color = Color3.new(0,1,0)
          else
             obj.box.Color = Color3.new(1,0,0)
          end
       else
-         obj.box.Visible = false
-         obj.name.Visible = false
-         obj.dist.Visible = false
+         obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false
       end
    end
 end
 
--- 4) FOV ОКРУЖНОСТЬ
+-- 5) FOV ОКРУЖНОСТЬ
 local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = false
-FOVCircle.Radius = FOVRadius
-FOVCircle.Thickness = 1
-FOVCircle.Color = Color3.new(1,1,1)
-FOVCircle.Filled = false
-FOVCircle.NumSides = 64
+FOVCircle.Visible = false; FOVCircle.Radius = FOVRadius; FOVCircle.Thickness = 1
+FOVCircle.Color = Color3.new(1,1,1); FOVCircle.Filled = false; FOVCircle.NumSides = 64
 FOVCircle.Position = Camera.ViewportSize / 2
 
--- 5) AIMBOT
+-- 6) AIMBOT
 local function GetClosestTarget()
-   local closest = nil
-   local minDist = FOVRadius
+   local closest = nil; local minDist = FOVRadius
    local mousePos = UserInputService:GetMouseLocation()
    for _, plr in pairs(Players:GetPlayers()) do
       if plr == LocalPlayer then continue end
@@ -119,8 +100,7 @@ local function GetClosestTarget()
       if not onScreen then continue end
       local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
       if dist < minDist then
-         minDist = dist
-         closest = {plr = plr, part = part, screenPos = Vector2.new(pos.X, pos.Y)}
+         minDist = dist; closest = {plr = plr, part = part, screenPos = Vector2.new(pos.X, pos.Y)}
       end
    end
    return closest
@@ -137,8 +117,7 @@ local function AimbotLoop()
    end
 end
 
--- 6) ЛАГ-ФИКС (уменьшение нагрузки)
-local LagFixEnabled = false
+-- 7) LAG FIX
 local function LagFix()
    if LagFixEnabled then
       settings().Rendering.QualityLevel = 1
@@ -156,74 +135,67 @@ local function LagFix()
    end
 end
 
--- 7) GUI ЭЛЕМЕНТЫ
+-- 8) GUI ЭЛЕМЕНТЫ (WindUI синтаксис)
 MainTab:CreateToggle({
-   Name = "Включить ESP",
+   Name = "ESP",
    CurrentValue = false,
    Callback = function(v) ESPEnabled = v
-      if v then
-         for _, plr in pairs(Players:GetPlayers()) do CreateESP(plr) end
-      else
-         for _, obj in pairs(ESPObjects) do
-            obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false
-         end
+      if v then for _, plr in pairs(Players:GetPlayers()) do CreateESP(plr) end
+      else for _, obj in pairs(ESPObjects) do obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false end
       end
    end
 })
 
 MainTab:CreateToggle({
-   Name = "Включить Aimbot",
+   Name = "Aimbot",
    CurrentValue = false,
    Callback = function(v) AimbotEnabled = v end
 })
 
 MainTab:CreateToggle({
-   Name = "Lag Fix (уничтожить эффекты)",
+   Name = "Lag Fix",
    CurrentValue = false,
    Callback = function(v) LagFixEnabled = v; LagFix() end
 })
 
 MainTab:CreateToggle({
-   Name = "Team Check (игнорировать союзников)",
+   Name = "Team Check",
    CurrentValue = false,
    Callback = function(v) TeamCheck = v end
 })
 
 VisualTab:CreateSlider({
-   Name = "Радиус FOV",
-   Range = {50, 400},
-   Increment = 5,
-   CurrentValue = FOVRadius,
+   Name = "FOV Radius",
+   Min = 50,
+   Max = 400,
+   Default = FOVRadius,
    Callback = function(v) FOVRadius = v; FOVCircle.Radius = v end
 })
 
 VisualTab:CreateToggle({
-   Name = "Показывать FOV круг",
+   Name = "Show FOV",
    CurrentValue = true,
    Callback = function(v) ShowFOV = v; FOVCircle.Visible = v end
 })
 
 AimbotTab:CreateSlider({
-   Name = "Сглаживание (0 - мгновенно, 1 - плавно)",
-   Range = {0, 1},
-   Increment = 0.05,
-   CurrentValue = AimbotSmoothness,
+   Name = "Smoothness",
+   Min = 0,
+   Max = 1,
+   Default = AimbotSmoothness,
    Callback = function(v) AimbotSmoothness = v end
 })
 
 AimbotTab:CreateDropdown({
-   Name = "Цель (часть тела)",
+   Name = "Target Part",
    Options = {"Head", "HumanoidRootPart", "Torso"},
-   CurrentOption = "Head",
+   Default = "Head",
    Callback = function(v) AimbotPart = v end
 })
 
--- 8) ОБНОВЛЕНИЯ
--- Новые игроки
+-- 9) ОБНОВЛЕНИЯ
 Players.PlayerAdded:Connect(function(plr)
-   plr.CharacterAdded:Connect(function() 
-      if ESPEnabled then CreateESP(plr) end
-   end)
+   plr.CharacterAdded:Connect(function() if ESPEnabled then CreateESP(plr) end end)
    if ESPEnabled then CreateESP(plr) end
 end)
 
@@ -234,11 +206,9 @@ Players.PlayerRemoving:Connect(function(plr)
    end
 end)
 
--- Основные циклы
 RunService.RenderStepped:Connect(function()
    if ESPEnabled then UpdateESP() end
    if AimbotEnabled then AimbotLoop() end
-   -- Обновление FOV круга
    if ShowFOV then
       FOVCircle.Visible = true
       FOVCircle.Position = UserInputService:GetMouseLocation()
@@ -247,11 +217,8 @@ RunService.RenderStepped:Connect(function()
    end
 end)
 
--- Инициализация существующих игроков
 for _, plr in pairs(Players:GetPlayers()) do
-   if plr ~= LocalPlayer then
-      CreateESP(plr)
-   end
+   if plr ~= LocalPlayer then CreateESP(plr) end
 end
 
-print("Palo Suite загружен.")
+print("Palo Suite [WindUI] загружен. WindUI требует корректного синтаксиса (см. документацию).")
