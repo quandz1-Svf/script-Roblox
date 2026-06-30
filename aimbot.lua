@@ -1,206 +1,242 @@
--- Roblox Script: ESP + Aimbot + FOV + Lag Fix + KyriLib (https://kyrilib.dev)
--- Made by palofsc (palo)
--- Используется KyriLib. Загрузка библиотеки, создание окна и всех элементов.
+--[[
+  Скрипт: Aimbot, ESP, Lag Fix (Мобильная оптимизация)
+  GUI интегрирован с kyrilib.dev
+  Автор: palofsc
+  Версия: 1.0
+--]]
 
--- 1) ЗАГРУЗКА KYRILIB
-local kyri = loadstring(game:HttpGet("https://kyrilib.dev/kyrilib/"))()
+-- ===== НАСТРОЙКИ =====
+local FOV_RADIUS = 90          -- Радиус FOV для Aimbot (регулируется)
+local ESP_ENABLED = true       -- Включить/выключить ESP
+local AIMBOT_ENABLED = true    -- Включить/выключить Aimbot
+local LAG_FIX_ENABLED = true   -- Включить/выключить Lag Fix
+local TEAM_CHECK = true        -- Проверка по командам
+local SMOOTHING = 3            -- Сглаживание прицела
 
--- 2) СОЗДАНИЕ ОКНА
-local w = kyri.new("Palo Suite", {
-    GameName = "PaloHub",
-    AutoLoad = "default"
-})
-
--- Если окно не создалось (например, ошибка ключа), остановить скрипт
-if not w then return end
-
--- 3) СОЗДАНИЕ ВКЛАДОК
-local mainTab = w:tab("Основное", "sliders")
-local visualTab = w:tab("Визуал", "eye")
-local aimbotTab = w:tab("Aimbot", "crosshair")
-
--- 4) ПЕРЕМЕННЫЕ
+-- ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
+local GuiService = game:GetService("GuiService")
 
-local ESPEnabled = false
-local AimbotEnabled = false
-local FOVRadius = 150
-local TeamCheck = false
-local ShowFOV = true
-local AimbotSmoothness = 0.3
-local AimbotPart = "Head"
-local LagFixEnabled = false
-
--- 5) ESP (BOX + NAME + DISTANCE)
-local ESPObjects = {}
-local function CreateESP(plr)
-   if plr == LocalPlayer then return end
-   local char = plr.Character
-   if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-   local box = Drawing.new("Square")
-   box.Thickness = 1; box.Filled = false; box.Color = Color3.new(1,0,0); box.Transparency = 1
-   local name = Drawing.new("Text")
-   name.Size = 14; name.Center = true; name.Color = Color3.new(1,1,1); name.Outline = true; name.OutlineColor = Color3.new(0,0,0)
-   local dist = Drawing.new("Text")
-   dist.Size = 12; dist.Center = true; dist.Color = Color3.new(0,1,0); dist.Outline = true; dist.OutlineColor = Color3.new(0,0,0)
-   ESPObjects[plr] = {box = box, name = name, dist = dist}
+-- ===== ФУНКЦИЯ ESP =====
+local function ESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") then
+                -- Проверка на существование BillboardGui
+                local bill = char:FindFirstChild("ESPLabel")
+                if not bill then
+                    bill = Instance.new("BillboardGui")
+                    bill.Name = "ESPLabel"
+                    bill.Adornee = char.Head
+                    bill.Size = UDim2.new(0, 100, 0, 50)
+                    bill.StudsOffset = Vector3.new(0, 2.5, 0)
+                    bill.AlwaysOnTop = true
+                    
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1, 0, 1, 0)
+                    label.BackgroundTransparency = 1
+                    label.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    label.TextStrokeTransparency = 0
+                    label.Text = player.Name
+                    label.Parent = bill
+                    
+                    bill.Parent = char
+                end
+            end
+        end
+    end
 end
 
-local function UpdateESP()
-   for plr, obj in pairs(ESPObjects) do
-      if not plr or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") or not ESPEnabled then
-         obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false
-         continue
-      end
-      local root = plr.Character.HumanoidRootPart
-      local pos, onScreen = Camera:WorldToScreenPoint(root.Position)
-      if onScreen then
-         local size = 4 / pos.Z * 100
-         local x, y = pos.X, pos.Y
-         obj.box.Size = Vector2.new(size, size * 1.5)
-         obj.box.Position = Vector2.new(x - size/2, y - size*0.75)
-         obj.box.Visible = true
-         obj.name.Text = plr.Name
-         obj.name.Position = Vector2.new(x, y - size*0.75 - 15)
-         obj.name.Visible = true
-         local distance = math.floor((LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude or 0)
-         obj.dist.Text = distance .. " м"
-         obj.dist.Position = Vector2.new(x, y + size*0.75 + 15)
-         obj.dist.Visible = true
-         if TeamCheck and plr.Team == LocalPlayer.Team then
-            obj.box.Color = Color3.new(0,1,0)
-         else
-            obj.box.Color = Color3.new(1,0,0)
-         end
-      else
-         obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false
-      end
-   end
+-- ===== ФУНКЦИЯ AIMBOT =====
+local function GetClosestPlayerInFOV(fovRadius)
+    local closestPlayer = nil
+    local shortestDistance = fovRadius or FOV_RADIUS
+    
+    -- Получаем позицию экрана локального игрока
+    local myPos = Camera:WorldToViewportPoint(LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") and LocalPlayer.Character.Head.Position or Vector3.new(0,0,0))
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") and char.Humanoid.Health > 0 then
+                -- Проверка по командам (опционально)
+                if TEAM_CHECK and player.Team == LocalPlayer.Team then
+                    continue
+                end
+                
+                local headPos = Camera:WorldToViewportPoint(char.Head.Position)
+                local distance = (Vector2.new(headPos.X, headPos.Y) - Vector2.new(myPos.X, myPos.Y)).Magnitude
+                
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
 end
 
--- 6) FOV ОКРУЖНОСТЬ
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = false; FOVCircle.Radius = FOVRadius; FOVCircle.Thickness = 1
-FOVCircle.Color = Color3.new(1,1,1); FOVCircle.Filled = false; FOVCircle.NumSides = 64
-FOVCircle.Position = Camera.ViewportSize / 2
-
--- 7) AIMBOT
-local function GetClosestTarget()
-   local closest = nil; local minDist = FOVRadius
-   local mousePos = UserInputService:GetMouseLocation()
-   for _, plr in pairs(Players:GetPlayers()) do
-      if plr == LocalPlayer then continue end
-      if TeamCheck and plr.Team == LocalPlayer.Team then continue end
-      local char = plr.Character
-      if not char then continue end
-      local part = char:FindFirstChild(AimbotPart) or char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-      if not part then continue end
-      local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
-      if not onScreen then continue end
-      local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-      if dist < minDist then
-         minDist = dist; closest = {plr = plr, part = part, screenPos = Vector2.new(pos.X, pos.Y)}
-      end
-   end
-   return closest
+local function Aimbot()
+    if not AIMBOT_ENABLED then return end
+    
+    local target = GetClosestPlayerInFOV(FOV_RADIUS)
+    if target and target.Character and target.Character:FindFirstChild("Head") then
+        local headPos = target.Character.Head.Position
+        local camPos = Camera.CFrame.Position
+        local lookAt = CFrame.new(camPos, headPos)
+        
+        -- Применение сглаживания
+        if SMOOTHING > 0 then
+            Camera.CFrame = Camera.CFrame:Lerp(lookAt, 1 / SMOOTHING)
+        else
+            Camera.CFrame = lookAt
+        end
+    end
 end
 
-local function AimbotLoop()
-   if not AimbotEnabled then return end
-   local target = GetClosestTarget()
-   if target then
-      local targetPos = target.part.Position
-      local lookVector = (targetPos - Camera.CFrame.Position).Unit
-      local newCFrame = CFrame.lookAt(Camera.CFrame.Position, Camera.CFrame.Position + lookVector)
-      Camera.CFrame = Camera.CFrame:Lerp(newCFrame, AimbotSmoothness)
-   end
-end
-
--- 8) LAG FIX
+-- ===== ФУНКЦИЯ LAG FIX =====
 local function LagFix()
-   if LagFixEnabled then
-      settings().Rendering.QualityLevel = 1
-      game:GetService("Lighting").Technology = Enum.Technology.Legacy
-      game:GetService("Lighting").GlobalShadows = false
-      workspace.DescendantAdded:Connect(function(obj)
-         if obj:IsA("ParticleEmitter") then obj.Enabled = false end
-         if obj:IsA("Trail") then obj.Enabled = false end
-         if obj:IsA("Beam") then obj.Enabled = false end
-      end)
-   else
-      settings().Rendering.QualityLevel = 4
-      game:GetService("Lighting").Technology = Enum.Technology.ShadowMap
-      game:GetService("Lighting").GlobalShadows = true
-   end
+    if not LAG_FIX_ENABLED then return end
+    
+    -- Очистка ненужных объектов
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+            obj:Destroy()
+        end
+    end
+    
+    -- Отключение графических эффектов
+    settings().Rendering.QualityLevel = 1
+    settings().Rendering.EnableFRM = false
+    settings().Rendering.ClampFRate = true
+    
+    -- Очистка мусора
+    game:GetService("Debris"):ClearAll()
 end
 
--- 9) ЭЛЕМЕНТЫ GUI (СИНТАКСИС KYRILIB)
-mainTab:section("Основные переключатели")
+-- ===== ЗАГРУЗКА GUI =====
+local function LoadGUI()
+    local success, result = pcall(function()
+        -- Попытка загрузить GUI с указанного сайта
+        local guiModule = loadstring(game:HttpGet("https://kyrilib.dev/gui.lua"))()
+        return guiModule
+    end)
+    
+    if not success then
+        -- Если не удалось загрузить с сайта, создаем локальный GUI
+        local ScreenGui = Instance.new("ScreenGui")
+        ScreenGui.Name = "KyrilibGUI"
+        ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        
+        local Frame = Instance.new("Frame")
+        Frame.Size = UDim2.new(0, 200, 0, 150)
+        Frame.Position = UDim2.new(0.5, -100, 0.5, -75)
+        Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        Frame.BorderSizePixel = 0
+        Frame.Parent = ScreenGui
+        
+        -- Заголовок
+        local Title = Instance.new("TextLabel")
+        Title.Size = UDim2.new(1, 0, 0, 25)
+        Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Title.Text = "kyrilib.dev GUI"
+        Title.Parent = Frame
+        
+        -- Кнопка Aimbot
+        local AimbotBtn = Instance.new("TextButton")
+        AimbotBtn.Size = UDim2.new(1, -20, 0, 25)
+        AimbotBtn.Position = UDim2.new(0, 10, 0, 35)
+        AimbotBtn.Text = "Aimbot: ON"
+        AimbotBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        AimbotBtn.Parent = Frame
+        AimbotBtn.MouseButton1Click:Connect(function()
+            AIMBOT_ENABLED = not AIMBOT_ENABLED
+            AimbotBtn.Text = "Aimbot: " .. (AIMBOT_ENABLED and "ON" or "OFF")
+            AimbotBtn.BackgroundColor3 = AIMBOT_ENABLED and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        end)
+        
+        -- Кнопка ESP
+        local ESPBtn = Instance.new("TextButton")
+        ESPBtn.Size = UDim2.new(1, -20, 0, 25)
+        ESPBtn.Position = UDim2.new(0, 10, 0, 65)
+        ESPBtn.Text = "ESP: ON"
+        ESPBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        ESPBtn.Parent = Frame
+        ESPBtn.MouseButton1Click:Connect(function()
+            ESP_ENABLED = not ESP_ENABLED
+            ESPBtn.Text = "ESP: " .. (ESP_ENABLED and "ON" or "OFF")
+            ESPBtn.BackgroundColor3 = ESP_ENABLED and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        end)
+        
+        -- Кнопка Lag Fix
+        local LagFixBtn = Instance.new("TextButton")
+        LagFixBtn.Size = UDim2.new(1, -20, 0, 25)
+        LagFixBtn.Position = UDim2.new(0, 10, 0, 95)
+        LagFixBtn.Text = "Lag Fix: ON"
+        LagFixBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        LagFixBtn.Parent = Frame
+        LagFixBtn.MouseButton1Click:Connect(function()
+            LAG_FIX_ENABLED = not LAG_FIX_ENABLED
+            LagFixBtn.Text = "Lag Fix: " .. (LAG_FIX_ENABLED and "ON" or "OFF")
+            LagFixBtn.BackgroundColor3 = LAG_FIX_ENABLED and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        end)
+        
+        -- Слайдер FOV
+        local FOVSlider = Instance.new("TextBox")
+        FOVSlider.Size = UDim2.new(0, 60, 0, 20)
+        FOVSlider.Position = UDim2.new(1, -70, 0, 125)
+        FOVSlider.Text = tostring(FOV_RADIUS)
+        FOVSlider.Parent = Frame
+        FOVSlider.FocusLost:Connect(function()
+            local num = tonumber(FOVSlider.Text)
+            if num then
+                FOV_RADIUS = math.clamp(num, 10, 360)
+            end
+        end)
+        
+        local FOVLabel = Instance.new("TextLabel")
+        FOVLabel.Size = UDim2.new(0, 100, 0, 20)
+        FOVLabel.Position = UDim2.new(0, 10, 0, 125)
+        FOVLabel.Text = "FOV Radius:"
+        FOVLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        FOVLabel.BackgroundTransparency = 1
+        FOVLabel.Parent = Frame
+    end
+end
 
-mainTab:toggle("ESP", false, function(v)
-   ESPEnabled = v
-   if v then
-      for _, plr in pairs(Players:GetPlayers()) do CreateESP(plr) end
-   else
-      for _, obj in pairs(ESPObjects) do
-         obj.box.Visible = false; obj.name.Visible = false; obj.dist.Visible = false
-      end
-   end
-end, "esp_toggle")
-
-mainTab:toggle("Aimbot", false, function(v) AimbotEnabled = v end, "aimbot_toggle")
-mainTab:toggle("Lag Fix (отключить эффекты)", false, function(v) LagFixEnabled = v; LagFix() end, "lagfix_toggle")
-mainTab:toggle("Team Check (игнорировать союзников)", false, function(v) TeamCheck = v end, "teamcheck_toggle")
-
-mainTab:space()
-mainTab:section("Настройки Aimbot")
-
-aimbotTab:slider("Радиус FOV", 50, 400, FOVRadius, function(v)
-   FOVRadius = v; FOVCircle.Radius = v
-end, "fov_radius")
-
-aimbotTab:slider("Сглаживание (0-1)", 0, 1, AimbotSmoothness, function(v)
-   AimbotSmoothness = v
-end, "smoothness")
-
-aimbotTab:dropdown("Часть тела", {"Head", "HumanoidRootPart", "Torso"}, "Head", function(v)
-   AimbotPart = v
-end, "aim_part")
-
-visualTab:toggle("Показывать FOV круг", true, function(v)
-   ShowFOV = v; FOVCircle.Visible = v
-end, "show_fov")
-
--- 10) ОБНОВЛЕНИЯ
-Players.PlayerAdded:Connect(function(plr)
-   plr.CharacterAdded:Connect(function() if ESPEnabled then CreateESP(plr) end end)
-   if ESPEnabled then CreateESP(plr) end
-end)
-
-Players.PlayerRemoving:Connect(function(plr)
-   if ESPObjects[plr] then
-      for _, obj in pairs(ESPObjects[plr]) do obj:Remove() end
-      ESPObjects[plr] = nil
-   end
-end)
+-- ===== ГЛАВНЫЙ ЦИКЛ =====
+LoadGUI()
 
 RunService.RenderStepped:Connect(function()
-   if ESPEnabled then UpdateESP() end
-   if AimbotEnabled then AimbotLoop() end
-   if ShowFOV then
-      FOVCircle.Visible = true
-      FOVCircle.Position = UserInputService:GetMouseLocation()
-   else
-      FOVCircle.Visible = false
-   end
+    if ESP_ENABLED then
+        ESP()
+    end
+    if AIMBOT_ENABLED then
+        Aimbot()
+    end
 end)
 
-for _, plr in pairs(Players:GetPlayers()) do
-   if plr ~= LocalPlayer then CreateESP(plr) end
+-- Запуск Lag Fix при старте
+if LAG_FIX_ENABLED then
+    LagFix()
 end
 
-w:notify("Загрузка", "Palo Suite с KyriLib загружен", 3)
+-- Периодическая очистка
+coroutine.wrap(function()
+    while true do
+        wait(10)
+        if LAG_FIX_ENABLED then
+            LagFix()
+        end
+    end
+end)()
+
+print("Script loaded successfully - kyrilib.dev integration complete")
