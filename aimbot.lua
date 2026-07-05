@@ -108,7 +108,7 @@ SnapLine.Thickness = 1
 SnapLine.Visible = false
 
 --------------------------------------------------------------------
--- ĐA TẦNG TEAM CHECK THÔNG MINH
+-- TEAM CHECK
 --------------------------------------------------------------------
 local function checkTargetTeam(player)
     if not teamCheckEnabled then return true end 
@@ -128,16 +128,10 @@ local function checkTargetTeam(player)
         return pAttr ~= localAttr
     end
 
-    local pLeader = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team")
-    local localLeader = LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Team")
-    if pLeader and localLeader then
-        return pLeader.Value ~= localLeader.Value
-    end
-
     return true 
 end
 
--- Hàm kiểm tra tường (Wall Check)
+-- Wall Check
 local function isVisible(targetPart)
     if not targetPart or not targetPart.Parent then return false end
     local origin = Camera.CFrame.Position
@@ -154,61 +148,6 @@ local function isVisible(targetPart)
     end
     return false
 end
-
---------------------------------------------------------------------
--- QUẢN LÝ CHAMS (Đã sửa lỗi không nhận diện khi qua Round mới)
---------------------------------------------------------------------
-local function applyHighlight(player)
-    local char = player.Character
-    local hlName = "Chams_" .. player.Name
-    local hl = ScreenGui:FindFirstChild(hlName)
-
-    -- Nếu player không có nhân vật (đang tải round mới), dọn dẹp Chams cũ ngay
-    if not char then 
-        if hl then hl:Destroy() end
-        return 
-    end
-
-    -- SỬA LỖI ROUND MỚI: Nếu tìm thấy Highlight cũ nhưng cơ thể nhân vật đã thay đổi
-    -- Lập tức hủy bỏ đối tượng cũ bị kẹt cache để ép code tạo lại cái mới ở block dưới
-    if hl and hl.Adornee ~= char then
-        hl:Destroy()
-        hl = nil
-    end
-
-    local isAlive = false
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        isAlive = hum.Health > 0
-    else
-        isAlive = char:IsDescendantOf(workspace) and char:FindFirstChildWhichIsA("BasePart") ~= nil
-    end
-
-    if chamsEnabled and checkTargetTeam(player) and isAlive then
-        if not hl then
-            hl = Instance.new("Highlight")
-            hl.Name = hlName
-            hl.FillTransparency = 1 
-            hl.OutlineColor = Color3.fromRGB(255, 0, 100) 
-            hl.OutlineTransparency = 0 
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
-            hl.Parent = ScreenGui 
-        end
-        hl.Adornee = char 
-        hl.Enabled = true
-    else
-        if hl then hl:Destroy() end
-    end
-end
-
-local function removeHighlight(player)
-    local hlName = "Chams_" .. player.Name
-    local hl = ScreenGui:FindFirstChild(hlName)
-    if hl then hl:Destroy() end
-end
-
--- Tự động dọn dẹp bộ nhớ khi có người rời phòng đấu
-Players.PlayerRemoving:Connect(removeHighlight)
 
 --------------------------------------------------------------------
 -- MAIN LOOP
@@ -235,10 +174,32 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Chams Loop Refresh liên tục mỗi Frame
+    --------------------------------------------------------------------
+    -- QUẢN LÝ CHAMS THẾ HỆ MỚI (Inject trực tiếp vào Character Model)
+    --------------------------------------------------------------------
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            applyHighlight(p)
+        if p ~= LocalPlayer and p.Character then
+            local char = p.Character
+            local hl = char:FindFirstChild("RainbowChams") -- Tìm kiếm Chams trực tiếp trong người đối thủ
+            
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            local isAlive = hum and hum.Health > 0 or (not hum and char:IsDescendantOf(workspace) and char:FindFirstChildWhichIsA("BasePart"))
+
+            if chamsEnabled and checkTargetTeam(p) and isAlive then
+                -- Nếu chưa có Chams (mới qua round hoặc mới hồi sinh), tạo mới ngay lập tức vào thẳng Character
+                if not hl then
+                    hl = Instance.new("Highlight")
+                    hl.Name = "RainbowChams"
+                    hl.FillTransparency = 1 
+                    hl.OutlineColor = Color3.fromRGB(255, 0, 100) 
+                    hl.OutlineTransparency = 0 
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
+                    hl.Parent = char -- ĐẶT VÀO ĐÂY để Roblox tự động vẽ theo cơ thể mới
+                end
+            else
+                -- Nếu tắt chức năng hoặc cùng team/đã chết, xóa Chams đi
+                if hl then hl:Destroy() end
+            end
         end
     end
 
@@ -299,7 +260,13 @@ ChamsBtn.MouseButton1Click:Connect(function()
     chamsEnabled = not chamsEnabled
     ChamsBtn.Text = chamsEnabled and "Outline Chams: ON" or "Outline Chams: OFF"
     if not chamsEnabled then
-        for _, p in ipairs(Players:GetPlayers()) do removeHighlight(p) end
+        -- Dọn dẹp nhanh khi tắt Chams bằng tay
+        for _, p in ipairs(Players:GetPlayers()) do 
+            if p.Character then
+                local hl = p.Character:FindFirstChild("RainbowChams")
+                if hl then hl:Destroy() end
+            end
+        end
     end
 end)
 
@@ -309,7 +276,12 @@ TeamBtn.MouseButton1Click:Connect(function()
 end)
 
 CloseBtn.MouseButton1Click:Connect(function() 
-    for _, p in ipairs(Players:GetPlayers()) do removeHighlight(p) end
+    for _, p in ipairs(Players:GetPlayers()) do 
+        if p.Character then
+            local hl = p.Character:FindFirstChild("RainbowChams")
+            if hl then hl:Destroy() end
+        end
+    end
     ScreenGui:Destroy() 
 end)
 
@@ -326,4 +298,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("Đã vá lỗi tự động reset Chams khi qua round mới thành công!")
+print("Đã viết lại hệ thống Chams nạp trực tiếp vào Character Model thành công!")
