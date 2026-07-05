@@ -1,5 +1,6 @@
 local aimbotEnabled = false
 local chamsEnabled = false
+local teamCheckEnabled = false -- Biến độc lập quản lý Check Team
 local aimbotFOV = 150
 local panelVisible = true
 
@@ -23,13 +24,14 @@ local MainStroke = Instance.new("UIStroke", MainPanel)
 
 local ToggleBtn = Instance.new("TextButton", MainPanel)
 local ChamsBtn = Instance.new("TextButton", MainPanel)
+local TeamBtn = Instance.new("TextButton", MainPanel) -- Nút Check Team mới
 local FOVInput = Instance.new("TextBox", MainPanel)
 local CloseBtn = Instance.new("TextButton", MainPanel)
 local Title = Instance.new("TextLabel", MainPanel)
 local SubTitle = Instance.new("TextLabel", MainPanel)
 
--- Style Panel (Đã thu gọn chiều cao xuống 185 cho vừa vặn)
-MainPanel.Size = UDim2.new(0, 200, 0, 185)
+-- Style Panel (Tăng nhẹ lên 215 để vừa vặn thêm 1 nút bấm)
+MainPanel.Size = UDim2.new(0, 200, 0, 215)
 MainPanel.Position = UDim2.new(0.5, -100, 0.4, 0)
 MainPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainPanel.BorderSizePixel = 0
@@ -74,10 +76,9 @@ end
 
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
 local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Pink Chams: OFF")
--- Đẩy ô FOV lên vị trí 135 thế chỗ nút Bind cũ cho gọn UI
-local FOVStroke = StyleRainbowButton(FOVInput, 135, tostring(aimbotFOV))
+local TeamStroke = StyleRainbowButton(TeamBtn, 135, "Team Check: OFF") -- Nút gán tại vị trí 135
+local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
 
--- Placeholder Text gợi ý cho ô FOV
 FOVInput.PlaceholderText = "Nhập FOV..."
 FOVInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 100)
 
@@ -120,6 +121,19 @@ local function isVisible(targetPart)
     return false
 end
 
+-- Hàm lọc đồng đội độc lập dựa trên trạng thái nút bấm
+local function checkTargetTeam(player)
+    if not teamCheckEnabled then return true end -- Nếu tắt nút check team thì coi tất cả là địch (hợp chơi FFA)
+    
+    if player.Team and LocalPlayer.Team then
+        return player.Team ~= LocalPlayer.Team
+    end
+    if player.TeamColor and LocalPlayer.TeamColor then
+        return player.TeamColor ~= LocalPlayer.TeamColor
+    end
+    return true
+end
+
 --------------------------------------------------------------------
 -- RAINBOW LOGIC
 --------------------------------------------------------------------
@@ -135,6 +149,8 @@ RunService.RenderStepped:Connect(function()
         ToggleBtn.TextColor3 = rainbow
         ChamsStroke.Color = rainbow
         ChamsBtn.TextColor3 = rainbow
+        TeamStroke.Color = rainbow
+        TeamBtn.TextColor3 = rainbow
         FOVStroke.Color = rainbow
         FOVInput.TextColor3 = rainbow
     end
@@ -147,17 +163,22 @@ RunService.RenderStepped:Connect(function()
     -- Chams Update
     if chamsEnabled then
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
+            if p ~= LocalPlayer and p.Character and checkTargetTeam(p) then
                 local h = p.Character:FindFirstChild("ShinyPink") or Instance.new("Highlight", p.Character)
                 h.Name = "ShinyPink"
                 h.FillColor = Color3.fromRGB(255, 105, 180)
                 h.OutlineColor = Color3.new(1, 1, 1)
-                -- Ẩn Chams đi nếu địch đã chết
+                
                 local hum = p.Character:FindFirstChildOfClass("Humanoid")
                 if hum and hum.Health > 0 then
                     h.Enabled = true
                 else
                     h.Enabled = false
+                end
+            else
+                -- Tự động dọn dẹp hoặc ẩn Chams nếu người đó chuyển sang cùng team
+                if p.Character and p.Character:FindFirstChild("ShinyPink") then
+                    p.Character.ShinyPink.Enabled = false
                 end
             end
         end
@@ -170,43 +191,13 @@ RunService.RenderStepped:Connect(function()
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
         for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and isEnemy(p) then
-        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-        if hum and hum.Health > 0 then 
-            local head = p.Character.Head
-            -- (Các đoạn check khoảng cách và wallcheck giữ nguyên...)
-
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and checkTargetTeam(p) then
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then 
+                    local head = p.Character.Head
                     local pos, screen = Camera:WorldToViewportPoint(head.Position)
                     if screen then
                         if isVisible(head) then 
--- Hàm kiểm tra xem người chơi đó có phải kẻ địch không (Smart Team Check)
-local function isEnemy(player)
-    -- Nếu chơi chế độ FFA hoặc game không chia phe, ai cũng là địch
-    if player.Neutral then 
-        return true 
-    end
-    
-    -- Cách 1: Kiểm tra thực thể Team mặc định của Roblox
-    if player.Team and LocalPlayer.Team then
-        if player.Team ~= LocalPlayer.Team then
-            return true
-        else
-            return false
-        end
-    end
-    
-    -- Cách 2: Kiểm tra thông qua màu sắc đại diện của phe (Đề phòng game lỗi gán phe)
-    if player.TeamColor and LocalPlayer.TeamColor then
-        if player.TeamColor ~= LocalPlayer.TeamColor then
-            return true
-        else
-            return false
-        end
-    end
-
-    return true -- Mặc định nếu không quét được phe thì coi là địch để tránh lỗi đơ script
-end
-
                             local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
                             if mDist < dist then 
                                 dist = mDist 
@@ -246,6 +237,12 @@ ChamsBtn.MouseButton1Click:Connect(function()
     ChamsBtn.Text = chamsEnabled and "Pink Chams: ON" or "Pink Chams: OFF"
 end)
 
+-- Sự kiện click nút Check Team
+TeamBtn.MouseButton1Click:Connect(function()
+    teamCheckEnabled = not teamCheckEnabled
+    TeamBtn.Text = teamCheckEnabled and "Team Check: ON" or "Team Check: OFF"
+end)
+
 CloseBtn.MouseButton1Click:Connect(function() 
     ScreenGui:Destroy() 
 end)
@@ -263,92 +260,5 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
---------------------------------------------------------------------
--- IMPROVED COUNTER BLOX VISUALS (Màu hồng & Galaxy)
---------------------------------------------------------------------
-local Lighting = game:GetService("Lighting")
 
-local function setupLighting()
-    for _, v in pairs(Lighting:GetChildren()) do
-        if v:IsA("Sky") or v:IsA("Clouds") or v:IsA("BloomEffect") then
-            v:Destroy()
-        end
-    end
-
-    local bloom = Instance.new("BloomEffect", Lighting)
-    bloom.Intensity = 1.2
-    bloom.Size = 24
-    bloom.Threshold = 0.8
-
-    local colorCorr = Instance.new("ColorCorrectionEffect", Lighting)
-    colorCorr.Saturation = 0.2
-    colorCorr.Contrast = 0.1
-
-    local Sky = Instance.new("Sky", Lighting)
-    Sky.SkyboxUp = "rbxassetid://159454288"
-    Sky.SkyboxDn = "rbxassetid://159454296"
-    Sky.SkyboxFt = "rbxassetid://159454293"
-    Sky.SkyboxBk = "rbxassetid://159454299"
-    Sky.SkyboxLf = "rbxassetid://159454286"
-    Sky.SkyboxRt = "rbxassetid://159454300"
-    Sky.SunTextureId = ""
-
-    Lighting.Ambient = Color3.fromRGB(120, 70, 180)
-    Lighting.OutdoorAmbient = Color3.fromRGB(100, 50, 150)
-    Lighting.Brightness = 2.5
-    Lighting.ClockTime = 20
-    Lighting.ExposureCompensation = 0.5
-end
-
-local function makePinkHands()
-    local viewModel = Camera:FindFirstChild("ViewModel") 
-        or Camera:FindFirstChild("Arms") 
-        or Camera:FindFirstChildWhichIsA("Model")
-
-    if not viewModel then return end
-
-    for _, part in pairs(viewModel:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local lname = part.Name:lower()
-            if lname:find("hand") or lname:find("arm") or lname:find("glass") or lname:find("sleeve") then
-                part.Material = Enum.Material.Neon
-                part.Color = Color3.fromRGB(255, 105, 180)
-                part.Transparency = 0.3
-                part.Reflectance = 0
-                local tex = part:FindFirstChildWhichIsA("Texture")
-                if tex then tex:Destroy() end
-            end
-        end
-    end
-end
-
-local function updateHUD(gui)
-    local pinkColor = Color3.fromRGB(255, 105, 180)
-    for _, obj in pairs(gui:GetDescendants()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            obj.TextColor3 = pinkColor
-        elseif obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-            obj.ImageColor3 = pinkColor
-        end
-    end
-end
-
-local function fullHUDUpdate()
-    pcall(function()
-        for _, gui in pairs(PlayerGui:GetChildren()) do
-            updateHUD(gui)
-        end
-    end)
-end
-
-setupLighting()
-RunService.RenderStepped:Connect(makePinkHands)
-
-LocalPlayer.CharacterAdded:Connect(fullHUDUpdate)
-PlayerGui.ChildAdded:Connect(function(child)
-    task.wait(0.1)
-    updateHUD(child)
-end)
-
-fullHUDUpdate()
-print("Đã thêm check máu kẻ địch thành công!")
+print("Tách biệt nút Check Team thành công!")
