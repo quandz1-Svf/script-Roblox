@@ -108,8 +108,40 @@ SnapLine.Thickness = 1
 SnapLine.Visible = false
 
 --------------------------------------------------------------------
--- LOGIC FUNCTIONS
+-- ĐA TẦNG TEAM CHECK THÔNG MINH (Sửa lỗi map Custom Rig)
 --------------------------------------------------------------------
+local function checkTargetTeam(player)
+    if not teamCheckEnabled then return true end -- Tắt check thì tất cả là địch
+    if player == LocalPlayer then return false end
+
+    -- Tầng 1: Kiểm tra qua hệ thống Team mặc định của Roblox
+    if player.Team and LocalPlayer.Team then
+        return player.Team ~= LocalPlayer.Team
+    end
+
+    -- Tầng 2: Kiểm tra qua Màu Đội (TeamColor)
+    if player.TeamColor and LocalPlayer.TeamColor then
+        return player.TeamColor ~= LocalPlayer.TeamColor
+    end
+
+    -- Tầng 3: Kiểm tra qua các thuộc tính ẩn gán trên Người (Attributes custom của map)
+    local pAttr = player:GetAttribute("Team") or player:GetAttribute("Faction") or player:GetAttribute("Side")
+    local localAttr = LocalPlayer:GetAttribute("Team") or LocalPlayer:GetAttribute("Faction") or LocalPlayer:GetAttribute("Side")
+    if pAttr and localAttr then
+        return pAttr ~= localAttr
+    end
+
+    -- Tầng 4: Kiểm tra qua bảng điểm leaderstats của phòng đấu
+    local pLeader = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team")
+    local localLeader = LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Team")
+    if pLeader and localLeader then
+        return pLeader.Value ~= localLeader.Value
+    end
+
+    return true -- Mặc định nếu không trùng phe ở bất cứ đâu thì coi là địch
+end
+
+-- Hàm kiểm tra tường
 local function isVisible(targetPart)
     if not targetPart or not targetPart.Parent then return false end
     local origin = Camera.CFrame.Position
@@ -127,51 +159,35 @@ local function isVisible(targetPart)
     return false
 end
 
-local function checkTargetTeam(player)
-    if not teamCheckEnabled then return true end 
-    if player.Team and LocalPlayer.Team then
-        return player.Team ~= LocalPlayer.Team
-    end
-    if player.TeamColor and LocalPlayer.TeamColor then
-        return player.TeamColor ~= LocalPlayer.TeamColor
-    end
-    return true
-end
-
--- Quản lý Chams bằng Adornee bảo mật cao (Khắc phục lỗi map custom)
+-- Quản lý Chams Adornee độc lập
 local function applyHighlight(player)
     local char = player.Character
     if not char then return end
 
-    -- Tạo tên Highlight riêng biệt cho từng người chơi và lưu trong ScreenGui của bạn
     local hlName = "Chams_" .. player.Name
     local hl = ScreenGui:FindFirstChild(hlName)
 
-    -- Kiểm tra trạng thái sống thông minh (Linh hoạt cho cả map không có Humanoid chuẩn)
     local isAlive = false
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         isAlive = hum.Health > 0
     else
-        -- Nếu map ẩn Humanoid, check xem model custom đó có đang xuất hiện ở map (workspace) không
         isAlive = char:IsDescendantOf(workspace) and char:FindFirstChildWhichIsA("BasePart") ~= nil
     end
 
-    -- Nếu đủ điều kiện hiển thị
     if chamsEnabled and checkTargetTeam(player) and isAlive then
         if not hl then
             hl = Instance.new("Highlight")
             hl.Name = hlName
-            hl.FillTransparency = 1 -- Giữ ruột trong suốt theo ý bạn
-            hl.OutlineColor = Color3.fromRGB(255, 0, 100) -- Viền hồng rực rỡ
-            hl.OutlineTransparency = 0 -- Hiện viền nét căng
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Hiện xuyên tường
-            hl.Parent = ScreenGui -- ĐỂ TRONG GUI CỦA BẠN (AN TOÀN TUYỆT ĐỐI)
+            hl.FillTransparency = 1 
+            hl.OutlineColor = Color3.fromRGB(255, 0, 100) 
+            hl.OutlineTransparency = 0 
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
+            hl.Parent = ScreenGui 
         end
-        hl.Adornee = char -- Chiếu viền lên model custom của địch
+        hl.Adornee = char 
         hl.Enabled = true
     else
-        -- Nếu địch chết hoặc tắt chams, xóa ngay để giải phóng slot Highlight trống của Roblox
         if hl then hl:Destroy() end
     end
 end
@@ -183,12 +199,12 @@ local function removeHighlight(player)
 end
 
 --------------------------------------------------------------------
--- MAIN LOOP
+-- MAIN LOOP (Tối ưu hóa vòng lặp loại bỏ hoàn toàn đồng đội)
 --------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
 
-    -- Sync UI Colors
+    -- Đồng bộ màu UI
     if MainPanel.Visible then
         MainStroke.Color = rainbow
         Title.TextColor3 = rainbow
@@ -208,35 +224,39 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Quét Chams liên tục bảo vệ bằng Adornee
+    -- Chams Loop Refresh
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             applyHighlight(p)
         end
     end
 
-    -- Auto Aimbot Logic
+    -- Logic Auto Aimbot tối ưu tuyệt đối
     if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and checkTargetTeam(p) then
-                -- Tìm bộ phận nhắm bắn (Ưu tiên Head, nếu map đổi tên thì lấy bừa 1 part của nhân vật đó)
-                local targetPart = p.Character:FindFirstChild("Head") or p.Character:FindFirstChildWhichIsA("BasePart")
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                local isAlive = hum and hum.Health > 0 or (not hum and p.Character:IsDescendantOf(workspace))
+            -- DÙNG CONTINUE: Chặn đứng ngay lập tức nếu là đồng đội hoặc không hợp lệ
+            if p == LocalPlayer or not p.Character or not checkTargetTeam(p) then
+                continue
+            end
 
-                if targetPart and isAlive then
-                    local pos, screen = Camera:WorldToViewportPoint(targetPart.Position)
-                    if screen then
-                        if isVisible(targetPart) then 
-                            local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                            if mDist < dist then 
-                                dist = mDist 
-                                target = targetPart 
-                            end
+            local char = p.Character
+            -- Định vị mục tiêu nhắm bắn linh hoạt trên Model Custom
+            local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            local isAlive = hum and hum.Health > 0 or (not hum and char:IsDescendantOf(workspace))
+
+            if targetPart and isAlive then
+                local pos, screen = Camera:WorldToViewportPoint(targetPart.Position)
+                if screen then
+                    if isVisible(targetPart) then 
+                        local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                        if mDist < dist then 
+                            dist = mDist 
+                            target = targetPart 
                         end
                     end
                 end
@@ -297,4 +317,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("Đã nâng cấp cơ chế Chams Adornee - Chấp mọi thể loại map custom!")
+print("Đã vá lỗi đồng bộ Aimbot và Chams Team Check thành công!")
