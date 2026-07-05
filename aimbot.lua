@@ -170,11 +170,12 @@ RunService.RenderStepped:Connect(function()
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
         for _, p in ipairs(Players:GetPlayers()) do
-            -- THÊM KIỂM TRA TRẠNG THÁI SỐNG (Humanoid.Health > 0)
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then 
-                    local head = p.Character.Head
+    if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and isEnemy(p) then
+        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 then 
+            local head = p.Character.Head
+            -- (Các đoạn check khoảng cách và wallcheck giữ nguyên...)
+
                     local pos, screen = Camera:WorldToViewportPoint(head.Position)
                     if screen then
                         if isVisible(head) then 
