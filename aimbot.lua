@@ -12,7 +12,6 @@ local LocalPlayer = Players.LocalPlayer
 
 local CoreGui = game:GetService("CoreGui")
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
--- Hỗ trợ đa dạng Executor
 local TargetGui = (pcall(function() return CoreGui.Name end) and CoreGui) or PlayerGui
 
 --------------------------------------------------------------------
@@ -20,7 +19,7 @@ local TargetGui = (pcall(function() return CoreGui.Name end) and CoreGui) or Pla
 --------------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "RainbowV2Gui"
-ScreenGui.ResetOnSpawn = false -- QUAN TRỌNG: Giữ GUI và Script không bị xóa khi bạn chết
+ScreenGui.ResetOnSpawn = false 
 ScreenGui.Parent = TargetGui
 
 local MainPanel = Instance.new("Frame", ScreenGui)
@@ -139,35 +138,48 @@ local function checkTargetTeam(player)
     return true
 end
 
--- Quản lý Chams Outline (Viền)
+-- Quản lý Chams bằng Adornee bảo mật cao (Khắc phục lỗi map custom)
 local function applyHighlight(player)
     local char = player.Character
     if not char then return end
 
-    local hl = char:FindFirstChild("OutlineChams")
-    if not hl then
-        hl = Instance.new("Highlight")
-        hl.Name = "OutlineChams"
-        hl.FillTransparency = 1 -- Ẩn hoàn toàn ruột (Trong suốt 100%)
-        hl.OutlineColor = Color3.fromRGB(255, 0, 100) -- Màu viền hồng đậm
-        hl.OutlineTransparency = 0 -- Hiện viền rõ nét
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Luôn nhìn thấy viền xuyên tường
-        hl.Parent = char
+    -- Tạo tên Highlight riêng biệt cho từng người chơi và lưu trong ScreenGui của bạn
+    local hlName = "Chams_" .. player.Name
+    local hl = ScreenGui:FindFirstChild(hlName)
+
+    -- Kiểm tra trạng thái sống thông minh (Linh hoạt cho cả map không có Humanoid chuẩn)
+    local isAlive = false
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        isAlive = hum.Health > 0
+    else
+        -- Nếu map ẩn Humanoid, check xem model custom đó có đang xuất hiện ở map (workspace) không
+        isAlive = char:IsDescendantOf(workspace) and char:FindFirstChildWhichIsA("BasePart") ~= nil
     end
 
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum and hum.Health > 0 and chamsEnabled and checkTargetTeam(player) then
+    -- Nếu đủ điều kiện hiển thị
+    if chamsEnabled and checkTargetTeam(player) and isAlive then
+        if not hl then
+            hl = Instance.new("Highlight")
+            hl.Name = hlName
+            hl.FillTransparency = 1 -- Giữ ruột trong suốt theo ý bạn
+            hl.OutlineColor = Color3.fromRGB(255, 0, 100) -- Viền hồng rực rỡ
+            hl.OutlineTransparency = 0 -- Hiện viền nét căng
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Hiện xuyên tường
+            hl.Parent = ScreenGui -- ĐỂ TRONG GUI CỦA BẠN (AN TOÀN TUYỆT ĐỐI)
+        end
+        hl.Adornee = char -- Chiếu viền lên model custom của địch
         hl.Enabled = true
     else
-        hl.Enabled = false
+        -- Nếu địch chết hoặc tắt chams, xóa ngay để giải phóng slot Highlight trống của Roblox
+        if hl then hl:Destroy() end
     end
 end
 
 local function removeHighlight(player)
-    if player.Character then
-        local hl = player.Character:FindFirstChild("OutlineChams")
-        if hl then hl:Destroy() end
-    end
+    local hlName = "Chams_" .. player.Name
+    local hl = ScreenGui:FindFirstChild(hlName)
+    if hl then hl:Destroy() end
 end
 
 --------------------------------------------------------------------
@@ -196,7 +208,7 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Liên tục quét và gán viền cho người chơi (Tránh mất khi họ respawn)
+    -- Quét Chams liên tục bảo vệ bằng Adornee
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             applyHighlight(p)
@@ -210,17 +222,20 @@ RunService.RenderStepped:Connect(function()
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and checkTargetTeam(p) then
+            if p ~= LocalPlayer and p.Character and checkTargetTeam(p) then
+                -- Tìm bộ phận nhắm bắn (Ưu tiên Head, nếu map đổi tên thì lấy bừa 1 part của nhân vật đó)
+                local targetPart = p.Character:FindFirstChild("Head") or p.Character:FindFirstChildWhichIsA("BasePart")
                 local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then 
-                    local head = p.Character.Head
-                    local pos, screen = Camera:WorldToViewportPoint(head.Position)
+                local isAlive = hum and hum.Health > 0 or (not hum and p.Character:IsDescendantOf(workspace))
+
+                if targetPart and isAlive then
+                    local pos, screen = Camera:WorldToViewportPoint(targetPart.Position)
                     if screen then
-                        if isVisible(head) then 
+                        if isVisible(targetPart) then 
                             local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
                             if mDist < dist then 
                                 dist = mDist 
-                                target = head 
+                                target = targetPart 
                             end
                         end
                     end
@@ -281,3 +296,5 @@ UserInputService.InputBegan:Connect(function(input, gp)
         end
     end
 end)
+
+print("Đã nâng cấp cơ chế Chams Adornee - Chấp mọi thể loại map custom!")
