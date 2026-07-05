@@ -1,6 +1,6 @@
 local aimbotEnabled = false
 local chamsEnabled = false
-local teamCheckEnabled = false -- Biến độc lập quản lý Check Team
+local teamCheckEnabled = false 
 local aimbotFOV = 150
 local panelVisible = true
 
@@ -24,13 +24,13 @@ local MainStroke = Instance.new("UIStroke", MainPanel)
 
 local ToggleBtn = Instance.new("TextButton", MainPanel)
 local ChamsBtn = Instance.new("TextButton", MainPanel)
-local TeamBtn = Instance.new("TextButton", MainPanel) -- Nút Check Team mới
+local TeamBtn = Instance.new("TextButton", MainPanel) 
 local FOVInput = Instance.new("TextBox", MainPanel)
 local CloseBtn = Instance.new("TextButton", MainPanel)
 local Title = Instance.new("TextLabel", MainPanel)
 local SubTitle = Instance.new("TextLabel", MainPanel)
 
--- Style Panel (Tăng nhẹ lên 215 để vừa vặn thêm 1 nút bấm)
+-- Style Panel
 MainPanel.Size = UDim2.new(0, 200, 0, 215)
 MainPanel.Position = UDim2.new(0.5, -100, 0.4, 0)
 MainPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -75,8 +75,8 @@ local function StyleRainbowButton(btn, pos, text)
 end
 
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
-local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Pink Chams: OFF")
-local TeamStroke = StyleRainbowButton(TeamBtn, 135, "Team Check: OFF") -- Nút gán tại vị trí 135
+local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Chams: OFF")
+local TeamStroke = StyleRainbowButton(TeamBtn, 135, "Team Check: OFF") 
 local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
 
 FOVInput.PlaceholderText = "Nhập FOV..."
@@ -103,7 +103,7 @@ local SnapLine = Drawing.new("Line")
 SnapLine.Thickness = 1
 SnapLine.Visible = false
 
--- Hàm kiểm tra tường (Wall Check)
+-- Hàm kiểm tra tường
 local function isVisible(targetPart)
     if not targetPart or not targetPart.Parent then return false end
     local origin = Camera.CFrame.Position
@@ -121,10 +121,9 @@ local function isVisible(targetPart)
     return false
 end
 
--- Hàm lọc đồng đội độc lập dựa trên trạng thái nút bấm
+-- Hàm check team độc lập
 local function checkTargetTeam(player)
-    if not teamCheckEnabled then return true end -- Nếu tắt nút check team thì coi tất cả là địch (hợp chơi FFA)
-    
+    if not teamCheckEnabled then return true end 
     if player.Team and LocalPlayer.Team then
         return player.Team ~= LocalPlayer.Team
     end
@@ -134,8 +133,29 @@ local function checkTargetTeam(player)
     return true
 end
 
+-- Hàm tạo Box Chams siêu nhẹ (Khắc phục lỗi không hiện trên một số map)
+local function applyBoxChams(character)
+    local targetBox = character:FindFirstChild("ChamsBox")
+    if not targetBox then
+        local box = Instance.new("BoxHandleAdornment")
+        box.Name = "ChamsBox"
+        box.Size = character:GetExtentsSize() + Vector3.new(0.2, 0.2, 0.2)
+        box.AlwaysOnTop = true -- Luôn luôn nhìn xuyên tường
+        box.ZIndex = 5
+        box.Transparency = 0.4
+        box.Color3 = Color3.fromRGB(255, 0, 0) -- Đổi sang màu đỏ cho dễ nhìn rõ kẻ địch
+        box.Adornee = character
+        box.Parent = character
+    end
+end
+
+local function removeBoxChams(character)
+    local targetBox = character:FindFirstChild("ChamsBox")
+    if targetBox then targetBox:Destroy() end
+end
+
 --------------------------------------------------------------------
--- RAINBOW LOGIC
+-- MAIN LOGIC
 --------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
@@ -160,31 +180,19 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Chams Update
-    if chamsEnabled then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and checkTargetTeam(p) then
-                local h = p.Character:FindFirstChild("ShinyPink") or Instance.new("Highlight", p.Character)
-                h.Name = "ShinyPink"
-                h.FillColor = Color3.fromRGB(255, 105, 180)
-                h.OutlineColor = Color3.new(1, 1, 1)
-                
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then
-                    h.Enabled = true
-                else
-                    h.Enabled = false
-                end
+    -- Chams Logic (Quét Box Chams liên tục)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if chamsEnabled and checkTargetTeam(p) and hum and hum.Health > 0 then
+                applyBoxChams(p.Character)
             else
-                -- Tự động dọn dẹp hoặc ẩn Chams nếu người đó chuyển sang cùng team
-                if p.Character and p.Character:FindFirstChild("ShinyPink") then
-                    p.Character.ShinyPink.Enabled = false
-                end
+                removeBoxChams(p.Character)
             end
         end
     end
 
-    -- Auto Aimbot Update
+    -- Auto Aimbot Logic
     if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
@@ -234,16 +242,19 @@ end)
 
 ChamsBtn.MouseButton1Click:Connect(function()
     chamsEnabled = not chamsEnabled
-    ChamsBtn.Text = chamsEnabled and "Pink Chams: ON" or "Pink Chams: OFF"
+    ChamsBtn.Text = chamsEnabled and "Chams: ON" or "Chams: OFF"
 end)
 
--- Sự kiện click nút Check Team
 TeamBtn.MouseButton1Click:Connect(function()
     teamCheckEnabled = not teamCheckEnabled
     TeamBtn.Text = teamCheckEnabled and "Team Check: ON" or "Team Check: OFF"
 end)
 
 CloseBtn.MouseButton1Click:Connect(function() 
+    -- Dọn dẹp Chams trước khi xóa GUI
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then removeBoxChams(p.Character) end
+    end
     ScreenGui:Destroy() 
 end)
 
@@ -260,5 +271,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-
-print("Tách biệt nút Check Team thành công!")
+print("Đã làm sạch đồ họa map và nâng cấp Box Chams thành công!")
