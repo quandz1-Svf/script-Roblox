@@ -108,40 +108,36 @@ SnapLine.Thickness = 1
 SnapLine.Visible = false
 
 --------------------------------------------------------------------
--- ĐA TẦNG TEAM CHECK THÔNG MINH (Sửa lỗi map Custom Rig)
+-- ĐA TẦNG TEAM CHECK THÔNG MINH
 --------------------------------------------------------------------
 local function checkTargetTeam(player)
-    if not teamCheckEnabled then return true end -- Tắt check thì tất cả là địch
+    if not teamCheckEnabled then return true end 
     if player == LocalPlayer then return false end
 
-    -- Tầng 1: Kiểm tra qua hệ thống Team mặc định của Roblox
     if player.Team and LocalPlayer.Team then
         return player.Team ~= LocalPlayer.Team
     end
 
-    -- Tầng 2: Kiểm tra qua Màu Đội (TeamColor)
     if player.TeamColor and LocalPlayer.TeamColor then
         return player.TeamColor ~= LocalPlayer.TeamColor
     end
 
-    -- Tầng 3: Kiểm tra qua các thuộc tính ẩn gán trên Người (Attributes custom của map)
     local pAttr = player:GetAttribute("Team") or player:GetAttribute("Faction") or player:GetAttribute("Side")
     local localAttr = LocalPlayer:GetAttribute("Team") or LocalPlayer:GetAttribute("Faction") or LocalPlayer:GetAttribute("Side")
     if pAttr and localAttr then
         return pAttr ~= localAttr
     end
 
-    -- Tầng 4: Kiểm tra qua bảng điểm leaderstats của phòng đấu
     local pLeader = player:FindFirstChild("leaderstats") and player.leaderstats:FindFirstChild("Team")
     local localLeader = LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Team")
     if pLeader and localLeader then
         return pLeader.Value ~= localLeader.Value
     end
 
-    return true -- Mặc định nếu không trùng phe ở bất cứ đâu thì coi là địch
+    return true 
 end
 
--- Hàm kiểm tra tường
+-- Hàm kiểm tra tường (Wall Check)
 local function isVisible(targetPart)
     if not targetPart or not targetPart.Parent then return false end
     local origin = Camera.CFrame.Position
@@ -159,13 +155,26 @@ local function isVisible(targetPart)
     return false
 end
 
--- Quản lý Chams Adornee độc lập
+--------------------------------------------------------------------
+-- QUẢN LÝ CHAMS (Đã sửa lỗi không nhận diện khi qua Round mới)
+--------------------------------------------------------------------
 local function applyHighlight(player)
     local char = player.Character
-    if not char then return end
-
     local hlName = "Chams_" .. player.Name
     local hl = ScreenGui:FindFirstChild(hlName)
+
+    -- Nếu player không có nhân vật (đang tải round mới), dọn dẹp Chams cũ ngay
+    if not char then 
+        if hl then hl:Destroy() end
+        return 
+    end
+
+    -- SỬA LỖI ROUND MỚI: Nếu tìm thấy Highlight cũ nhưng cơ thể nhân vật đã thay đổi
+    -- Lập tức hủy bỏ đối tượng cũ bị kẹt cache để ép code tạo lại cái mới ở block dưới
+    if hl and hl.Adornee ~= char then
+        hl:Destroy()
+        hl = nil
+    end
 
     local isAlive = false
     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -198,13 +207,15 @@ local function removeHighlight(player)
     if hl then hl:Destroy() end
 end
 
+-- Tự động dọn dẹp bộ nhớ khi có người rời phòng đấu
+Players.PlayerRemoving:Connect(removeHighlight)
+
 --------------------------------------------------------------------
--- MAIN LOOP (Tối ưu hóa vòng lặp loại bỏ hoàn toàn đồng đội)
+-- MAIN LOOP
 --------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
 
-    -- Đồng bộ màu UI
     if MainPanel.Visible then
         MainStroke.Color = rainbow
         Title.TextColor3 = rainbow
@@ -224,27 +235,25 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Chams Loop Refresh
+    -- Chams Loop Refresh liên tục mỗi Frame
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             applyHighlight(p)
         end
     end
 
-    -- Logic Auto Aimbot tối ưu tuyệt đối
+    -- Logic Auto Aimbot
     if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
         local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
         for _, p in ipairs(Players:GetPlayers()) do
-            -- DÙNG CONTINUE: Chặn đứng ngay lập tức nếu là đồng đội hoặc không hợp lệ
             if p == LocalPlayer or not p.Character or not checkTargetTeam(p) then
                 continue
             end
 
             local char = p.Character
-            -- Định vị mục tiêu nhắm bắn linh hoạt trên Model Custom
             local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("UpperTorso") or char:FindFirstChildWhichIsA("BasePart")
             local hum = char:FindFirstChildOfClass("Humanoid")
             local isAlive = hum and hum.Health > 0 or (not hum and char:IsDescendantOf(workspace))
@@ -317,4 +326,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("Đã vá lỗi đồng bộ Aimbot và Chams Team Check thành công!")
+print("Đã vá lỗi tự động reset Chams khi qua round mới thành công!")
