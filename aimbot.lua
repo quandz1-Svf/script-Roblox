@@ -178,6 +178,34 @@ RunService.RenderStepped:Connect(function()
                     local pos, screen = Camera:WorldToViewportPoint(head.Position)
                     if screen then
                         if isVisible(head) then 
+-- Hàm kiểm tra xem người chơi đó có phải kẻ địch không (Smart Team Check)
+local function isEnemy(player)
+    -- Nếu chơi chế độ FFA hoặc game không chia phe, ai cũng là địch
+    if player.Neutral then 
+        return true 
+    end
+    
+    -- Cách 1: Kiểm tra thực thể Team mặc định của Roblox
+    if player.Team and LocalPlayer.Team then
+        if player.Team ~= LocalPlayer.Team then
+            return true
+        else
+            return false
+        end
+    end
+    
+    -- Cách 2: Kiểm tra thông qua màu sắc đại diện của phe (Đề phòng game lỗi gán phe)
+    if player.TeamColor and LocalPlayer.TeamColor then
+        if player.TeamColor ~= LocalPlayer.TeamColor then
+            return true
+        else
+            return false
+        end
+    end
+
+    return true -- Mặc định nếu không quét được phe thì coi là địch để tránh lỗi đơ script
+end
+
                             local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
                             if mDist < dist then 
                                 dist = mDist 
