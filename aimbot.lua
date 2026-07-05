@@ -12,12 +12,17 @@ local LocalPlayer = Players.LocalPlayer
 
 local CoreGui = game:GetService("CoreGui")
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local TargetGui = CoreGui or PlayerGui
+-- Hỗ trợ đa dạng Executor
+local TargetGui = (pcall(function() return CoreGui.Name end) and CoreGui) or PlayerGui
 
 --------------------------------------------------------------------
 -- UI Creation (Rainbow Themed)
 --------------------------------------------------------------------
-local ScreenGui = Instance.new("ScreenGui", TargetGui)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "RainbowV2Gui"
+ScreenGui.ResetOnSpawn = false -- QUAN TRỌNG: Giữ GUI và Script không bị xóa khi bạn chết
+ScreenGui.Parent = TargetGui
+
 local MainPanel = Instance.new("Frame", ScreenGui)
 local MainCorner = Instance.new("UICorner", MainPanel)
 local MainStroke = Instance.new("UIStroke", MainPanel)
@@ -75,7 +80,7 @@ local function StyleRainbowButton(btn, pos, text)
 end
 
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
-local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Chams: OFF")
+local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Outline Chams: OFF")
 local TeamStroke = StyleRainbowButton(TeamBtn, 135, "Team Check: OFF") 
 local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
 
@@ -106,7 +111,6 @@ SnapLine.Visible = false
 --------------------------------------------------------------------
 -- LOGIC FUNCTIONS
 --------------------------------------------------------------------
--- Hàm kiểm tra tường
 local function isVisible(targetPart)
     if not targetPart or not targetPart.Parent then return false end
     local origin = Camera.CFrame.Position
@@ -124,7 +128,6 @@ local function isVisible(targetPart)
     return false
 end
 
--- Hàm check team độc lập
 local function checkTargetTeam(player)
     if not teamCheckEnabled then return true end 
     if player.Team and LocalPlayer.Team then
@@ -136,24 +139,22 @@ local function checkTargetTeam(player)
     return true
 end
 
--- Quản lý Chams Highlight (Đã sửa lỗi không hiện khi hồi sinh)
+-- Quản lý Chams Outline (Viền)
 local function applyHighlight(player)
     local char = player.Character
     if not char then return end
 
-    local hl = char:FindFirstChild("EnemyHighlight")
+    local hl = char:FindFirstChild("OutlineChams")
     if not hl then
         hl = Instance.new("Highlight")
-        hl.Name = "EnemyHighlight"
-        hl.FillColor = Color3.fromRGB(255, 0, 100) -- Màu hồng đậm rực rỡ dễ quan sát hành động
-        hl.FillTransparency = 0.4
-        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-        hl.OutlineTransparency = 0
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Luôn hiện rõ nét xuyên tường
+        hl.Name = "OutlineChams"
+        hl.FillTransparency = 1 -- Ẩn hoàn toàn ruột (Trong suốt 100%)
+        hl.OutlineColor = Color3.fromRGB(255, 0, 100) -- Màu viền hồng đậm
+        hl.OutlineTransparency = 0 -- Hiện viền rõ nét
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Luôn nhìn thấy viền xuyên tường
         hl.Parent = char
     end
 
-    -- Ẩn highlight ngay lập tức nếu mục tiêu chết để giải phóng slot cho hệ thống
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum and hum.Health > 0 and chamsEnabled and checkTargetTeam(player) then
         hl.Enabled = true
@@ -164,27 +165,10 @@ end
 
 local function removeHighlight(player)
     if player.Character then
-        local hl = player.Character:FindFirstChild("EnemyHighlight")
+        local hl = player.Character:FindFirstChild("OutlineChams")
         if hl then hl:Destroy() end
     end
 end
-
--- Lắng nghe sự kiện người chơi hồi sinh để nạp lại Highlight ngay
-for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer then
-        p.CharacterAdded:Connect(function()
-            task.wait(0.2) -- Đợi nhân vật tải xong form hoàn toàn
-            if chamsEnabled then applyHighlight(p) end
-        end)
-    end
-end
-
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function()
-        task.wait(0.2)
-        if chamsEnabled then applyHighlight(p) end
-    end)
-end)
 
 --------------------------------------------------------------------
 -- MAIN LOOP
@@ -212,7 +196,7 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Chams Loop Refresh
+    -- Liên tục quét và gán viền cho người chơi (Tránh mất khi họ respawn)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             applyHighlight(p)
@@ -269,7 +253,7 @@ end)
 
 ChamsBtn.MouseButton1Click:Connect(function()
     chamsEnabled = not chamsEnabled
-    ChamsBtn.Text = chamsEnabled and "Chams: ON" or "Chams: OFF"
+    ChamsBtn.Text = chamsEnabled and "Outline Chams: ON" or "Outline Chams: OFF"
     if not chamsEnabled then
         for _, p in ipairs(Players:GetPlayers()) do removeHighlight(p) end
     end
@@ -297,5 +281,3 @@ UserInputService.InputBegan:Connect(function(input, gp)
         end
     end
 end)
-
-print("Đã tối ưu hóa Highlight Chams tự động gán khi hồi sinh!")
