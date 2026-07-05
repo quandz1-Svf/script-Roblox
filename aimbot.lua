@@ -103,6 +103,9 @@ local SnapLine = Drawing.new("Line")
 SnapLine.Thickness = 1
 SnapLine.Visible = false
 
+--------------------------------------------------------------------
+-- LOGIC FUNCTIONS
+--------------------------------------------------------------------
 -- Hàm kiểm tra tường
 local function isVisible(targetPart)
     if not targetPart or not targetPart.Parent then return false end
@@ -133,29 +136,58 @@ local function checkTargetTeam(player)
     return true
 end
 
--- Hàm tạo Box Chams siêu nhẹ (Khắc phục lỗi không hiện trên một số map)
-local function applyBoxChams(character)
-    local targetBox = character:FindFirstChild("ChamsBox")
-    if not targetBox then
-        local box = Instance.new("BoxHandleAdornment")
-        box.Name = "ChamsBox"
-        box.Size = character:GetExtentsSize() + Vector3.new(0.2, 0.2, 0.2)
-        box.AlwaysOnTop = true -- Luôn luôn nhìn xuyên tường
-        box.ZIndex = 5
-        box.Transparency = 0.4
-        box.Color3 = Color3.fromRGB(255, 0, 0) -- Đổi sang màu đỏ cho dễ nhìn rõ kẻ địch
-        box.Adornee = character
-        box.Parent = character
+-- Quản lý Chams Highlight (Đã sửa lỗi không hiện khi hồi sinh)
+local function applyHighlight(player)
+    local char = player.Character
+    if not char then return end
+
+    local hl = char:FindFirstChild("EnemyHighlight")
+    if not hl then
+        hl = Instance.new("Highlight")
+        hl.Name = "EnemyHighlight"
+        hl.FillColor = Color3.fromRGB(255, 0, 100) -- Màu hồng đậm rực rỡ dễ quan sát hành động
+        hl.FillTransparency = 0.4
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Luôn hiện rõ nét xuyên tường
+        hl.Parent = char
+    end
+
+    -- Ẩn highlight ngay lập tức nếu mục tiêu chết để giải phóng slot cho hệ thống
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health > 0 and chamsEnabled and checkTargetTeam(player) then
+        hl.Enabled = true
+    else
+        hl.Enabled = false
     end
 end
 
-local function removeBoxChams(character)
-    local targetBox = character:FindFirstChild("ChamsBox")
-    if targetBox then targetBox:Destroy() end
+local function removeHighlight(player)
+    if player.Character then
+        local hl = player.Character:FindFirstChild("EnemyHighlight")
+        if hl then hl:Destroy() end
+    end
 end
 
+-- Lắng nghe sự kiện người chơi hồi sinh để nạp lại Highlight ngay
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        p.CharacterAdded:Connect(function()
+            task.wait(0.2) -- Đợi nhân vật tải xong form hoàn toàn
+            if chamsEnabled then applyHighlight(p) end
+        end)
+    end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        task.wait(0.2)
+        if chamsEnabled then applyHighlight(p) end
+    end)
+end)
+
 --------------------------------------------------------------------
--- MAIN LOGIC
+-- MAIN LOOP
 --------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
@@ -180,15 +212,10 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Chams Logic (Quét Box Chams liên tục)
+    -- Chams Loop Refresh
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if chamsEnabled and checkTargetTeam(p) and hum and hum.Health > 0 then
-                applyBoxChams(p.Character)
-            else
-                removeBoxChams(p.Character)
-            end
+        if p ~= LocalPlayer then
+            applyHighlight(p)
         end
     end
 
@@ -243,6 +270,9 @@ end)
 ChamsBtn.MouseButton1Click:Connect(function()
     chamsEnabled = not chamsEnabled
     ChamsBtn.Text = chamsEnabled and "Chams: ON" or "Chams: OFF"
+    if not chamsEnabled then
+        for _, p in ipairs(Players:GetPlayers()) do removeHighlight(p) end
+    end
 end)
 
 TeamBtn.MouseButton1Click:Connect(function()
@@ -251,10 +281,7 @@ TeamBtn.MouseButton1Click:Connect(function()
 end)
 
 CloseBtn.MouseButton1Click:Connect(function() 
-    -- Dọn dẹp Chams trước khi xóa GUI
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then removeBoxChams(p.Character) end
-    end
+    for _, p in ipairs(Players:GetPlayers()) do removeHighlight(p) end
     ScreenGui:Destroy() 
 end)
 
@@ -271,4 +298,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("Đã làm sạch đồ họa map và nâng cấp Box Chams thành công!")
+print("Đã tối ưu hóa Highlight Chams tự động gán khi hồi sinh!")
