@@ -1,7 +1,7 @@
 local aimbotEnabled = false
 local chamsEnabled = false
 local teamCheckEnabled = false 
-local aimTargetSetting = "Torso" -- Mặc định ban đầu là Thân ("Torso" hoặc "Head")
+local aimTargetSetting = "Torso" 
 local aimbotFOV = 150
 local panelVisible = true
 
@@ -15,11 +15,18 @@ local CoreGui = game:GetService("CoreGui")
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local TargetGui = (pcall(function() return CoreGui.Name end) and CoreGui) or PlayerGui
 
+-- Kho lưu trữ Chams độc lập trong Workspace
+local ChamsStorage = workspace:FindFirstChild("RainbowChams_Storage")
+if ChamsStorage then ChamsStorage:Destroy() end
+ChamsStorage = Instance.new("Folder")
+ChamsStorage.Name = "RainbowChams_Storage"
+ChamsStorage.Parent = workspace
+
 --------------------------------------------------------------------
--- UI Creation (Rainbow Themed - Tăng kích thước để chứa nút mới)
+-- UI Creation (Rainbow Themed)
 --------------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "RainbowV6Gui"
+ScreenGui.Name = "RainbowV6FinalFix"
 ScreenGui.ResetOnSpawn = false 
 ScreenGui.Parent = TargetGui
 
@@ -30,13 +37,12 @@ local MainStroke = Instance.new("UIStroke", MainPanel)
 local ToggleBtn = Instance.new("TextButton", MainPanel)
 local ChamsBtn = Instance.new("TextButton", MainPanel)
 local TeamBtn = Instance.new("TextButton", MainPanel) 
-local AimPartBtn = Instance.new("TextButton", MainPanel) -- Nút tùy chỉnh bộ phận Aim
+local AimPartBtn = Instance.new("TextButton", MainPanel) 
 local FOVInput = Instance.new("TextBox", MainPanel)
 local CloseBtn = Instance.new("TextButton", MainPanel)
 local Title = Instance.new("TextLabel", MainPanel)
 local SubTitle = Instance.new("TextLabel", MainPanel)
 
--- Style Panel (Tăng chiều cao lên 255 để menu rộng rãi không bị đè chữ)
 MainPanel.Size = UDim2.new(0, 200, 0, 255)
 MainPanel.Position = UDim2.new(0.5, -100, 0.4, 0)
 MainPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -50,9 +56,9 @@ MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 Title.Size = UDim2.new(1, 0, 0, 25)
 Title.Position = UDim2.new(0, 0, 0, 5)
-Title.Text = "RAINBOW V6"
+Title.Text = "RAINBOW V6 HYBRID"
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 16
+Title.TextSize = 15
 Title.BackgroundTransparency = 1
 Title.ZIndex = 1
 
@@ -81,10 +87,10 @@ local function StyleRainbowButton(btn, pos, text)
 end
 
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
-local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Box Chams: OFF")
+local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Hybrid Chams: OFF")
 local TeamStroke = StyleRainbowButton(TeamBtn, 135, "Team Check: OFF") 
-local AimPartStroke = StyleRainbowButton(AimPartBtn, 175, "Aim Part: Torso") -- Vị trí nút Aim Part
-local FOVStroke = StyleRainbowButton(FOVInput, 215, tostring(aimbotFOV))     -- Đẩy ô nhập FOV xuống cuối
+local AimPartStroke = StyleRainbowButton(AimPartBtn, 175, "Aim Part: Torso") 
+local FOVStroke = StyleRainbowButton(FOVInput, 215, tostring(aimbotFOV))
 
 FOVInput.PlaceholderText = "Nhập FOV..."
 FOVInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 100)
@@ -100,7 +106,6 @@ CloseBtn.ZIndex = 10
 local CloseCorner = Instance.new("UICorner", CloseBtn)
 CloseCorner.CornerRadius = UDim.new(1, 0)
 
--- Drawings
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2     
 FOVCircle.Visible = false
@@ -134,7 +139,7 @@ local function isVisible(targetPart)
     local direction = targetPart.Position - origin
 
     local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera, ChamsStorage}
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
     local raycastResult = workspace:Raycast(origin, direction, raycastParams)
@@ -146,71 +151,69 @@ local function isVisible(targetPart)
 end
 
 --------------------------------------------------------------------
--- SURFACEGUI CHAMS GENERATOR (Giữ nguyên bản V6 siêu ổn định)
+-- CƠ CHẾ LIVE-REFRESH HYBRID CHAMS (Có lọc máu và dọn sạch khi thoát)
 --------------------------------------------------------------------
-local faces = {"Front", "Back", "Left", "Right", "Top", "Bottom"}
-
-local function CreateSG(name, parent, face)
-    local SurfaceGui = Instance.new("SurfaceGui")
-    SurfaceGui.Name = name
-    SurfaceGui.Parent = parent
-    SurfaceGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    SurfaceGui.Face = Enum.NormalId[face]
-    SurfaceGui.LightInfluence = 0
-    SurfaceGui.ResetOnSpawn = false
-    SurfaceGui.AlwaysOnTop = true
-    
-    local Frame = Instance.new("Frame", SurfaceGui)
-    Frame.BackgroundColor3 = Color3.fromRGB(255, 0, 100) 
-    Frame.BackgroundTransparency = 0.4 
-    Frame.Size = UDim2.new(1, 0, 1, 0)
-    Frame.BorderSizePixel = 0
-    return SurfaceGui
-end
-
-local function clearChamsFromCharacter(char)
-    if not char then return end
-    for _, v in ipairs(char:GetChildren()) do
-        if v:IsA("MeshPart") or v:IsA("Part") then
-            for _, child in ipairs(v:GetChildren()) do
-                if child.Name == "Universal_SurfaceCham" then
-                    child:Destroy()
-                end
-            end
-        end
-    end
+local function clearAllChams()
+    ChamsStorage:ClearAllChildren()
 end
 
 task.spawn(function()
     while true do
-        task.wait(1)
+        task.wait(0.2)
         if chamsEnabled then
             for _, v in ipairs(Players:GetPlayers()) do
-                if v ~= LocalPlayer and v.Character and v.Character:IsDescendantOf(workspace) then
+                if v ~= LocalPlayer then
                     local char = v.Character
-                    local head = char:FindFirstChild("Head")
-                    
-                    if checkTargetTeam(v) then
-                        if head and not head:FindFirstChild("Universal_SurfaceCham") then
-                            for _, part in ipairs(char:GetChildren()) do
-                                if part:IsA("MeshPart") or part:IsA("Part") then
-                                    for _, face in ipairs(faces) do
-                                        CreateSG("Universal_SurfaceCham", part, face)
-                                    end
+                    if char and char:IsDescendantOf(workspace) then
+                        local rootPart = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head") or char:FindFirstChild("Torso")
+                        local humanoid = char:FindFirstChildOfClass("Humanoid")
+                        local nameTag = "Cham_" .. v.Name
+                        local existingCham = ChamsStorage:FindFirstChild(nameTag)
+                        
+                        -- Chỉ hiện Chams khi Team hợp lệ, có bộ phận gốc và mục tiêu còn sống
+                        if checkTargetTeam(v) and rootPart and humanoid and humanoid.Health > 0 then
+                            if not existingCham then
+                                local box = Instance.new("BoxHandleAdornment")
+                                box.Name = nameTag
+                                box.Size = Vector3.new(4, 5, 4) 
+                                box.Color3 = Color3.fromRGB(255, 0, 100) 
+                                box.Transparency = 0.5
+                                box.AlwaysOnTop = true 
+                                box.ZIndex = 5
+                                box.Adornee = rootPart
+                                box.Parent = ChamsStorage
+                            else
+                                if existingCham.Adornee ~= rootPart then
+                                    existingCham.Adornee = rootPart
                                 end
                             end
+                        else
+                            -- Xóa Chams ngay lập tức nếu đối thủ chết hoặc đổi đội
+                            if existingCham then existingCham:Destroy() end
                         end
                     else
-                        clearChamsFromCharacter(char)
+                        -- Xóa Chams khi nhân vật tạm thời không tồn tại (đang chờ hồi sinh)
+                        local existingCham = ChamsStorage:FindFirstChild("Cham_" .. v.Name)
+                        if existingCham then existingCham:Destroy() end
                     end
                 end
             end
+        else
+            clearAllChams()
         end
     end
 end)
 
+-- SỰ KIỆN XỬ LÝ LỖI KẸT HÌNH: Xóa Chams của người chơi ngay khi họ thoát game hẳn
+Players.PlayerRemoving:Connect(function(player)
+    local leftPlayerCham = ChamsStorage:FindFirstChild("Cham_" .. player.Name)
+    if leftPlayerCham then
+        leftPlayerCham:Destroy()
+    end
+end)
+
 --------------------------------------------------------------------
--- MAIN RENDERING LOOP (Xử lý Rainbow UI và Adaptive Aimbot thông minh)
+-- MAIN RENDERING LOOP (UI & Adaptive Aimbot có lọc máu)
 --------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
@@ -236,7 +239,6 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Logic Adaptive Aimbot (Tự động đổi mục tiêu khi bị vật cản che khuất)
     if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
@@ -248,24 +250,22 @@ RunService.RenderStepped:Connect(function()
             end
 
             local char = p.Character
-            local isCharacterValid = char:FindFirstChild("HumanoidRootPart") and char:IsDescendantOf(workspace)
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local isCharacterValid = (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")) and char:IsDescendantOf(workspace)
 
-            if isCharacterValid then
+            if isCharacterValid and humanoid and humanoid.Health > 0 then
                 local headPart = char:FindFirstChild("Head")
                 local torsoPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
                 
                 local chosenPart = nil
 
-                -- XỬ LÝ ĐIỀU KIỆN THÔNG MINH TẠI ĐÂY
                 if aimTargetSetting == "Torso" then
-                    -- Nếu chọn Thân: Ưu tiên ngắm Thân trước, nếu Thân bị che thì kiểm tra Đầu
                     if torsoPart and isVisible(torsoPart) then
                         chosenPart = torsoPart
                     elseif headPart and isVisible(headPart) then
                         chosenPart = headPart
                     end
                 elseif aimTargetSetting == "Head" then
-                    -- Nếu chọn Đầu: Ưu tiên ngắm Đầu trước, nếu Đầu bị che thì kiểm tra Thân
                     if headPart and isVisible(headPart) then
                         chosenPart = headPart
                     elseif torsoPart and isVisible(torsoPart) then
@@ -273,7 +273,6 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
 
-                -- Nếu tìm được bộ phận không bị che khuất phù hợp quy tắc
                 if chosenPart then
                     local pos, screen = Camera:WorldToViewportPoint(chosenPart.Position)
                     if screen then
@@ -312,23 +311,18 @@ end)
 
 ChamsBtn.MouseButton1Click:Connect(function()
     chamsEnabled = not chamsEnabled
-    ChamsBtn.Text = chamsEnabled and "Box Chams: ON" or "Box Chams: OFF"
+    ChamsBtn.Text = chamsEnabled and "Hybrid Chams: ON" or "Hybrid Chams: OFF"
     if not chamsEnabled then
-        for _, p in ipairs(Players:GetPlayers()) do
-            clearChamsFromCharacter(p.Character)
-        end
+        clearAllChams()
     end
 end)
 
 TeamBtn.MouseButton1Click:Connect(function()
     teamCheckEnabled = not teamCheckEnabled
     TeamBtn.Text = teamCheckEnabled and "Team Check: ON" or "Team Check: OFF"
-    for _, p in ipairs(Players:GetPlayers()) do
-        clearChamsFromCharacter(p.Character)
-    end
+    clearAllChams()
 end)
 
--- Sự kiện nhấn nút chuyển đổi giữa Đầu và Thân
 AimPartBtn.MouseButton1Click:Connect(function()
     if aimTargetSetting == "Torso" then
         aimTargetSetting = "Head"
@@ -340,9 +334,8 @@ AimPartBtn.MouseButton1Click:Connect(function()
 end)
 
 CloseBtn.MouseButton1Click:Connect(function() 
-    for _, p in ipairs(Players:GetPlayers()) do
-        clearChamsFromCharacter(p.Character)
-    end
+    clearAllChams()
+    if ChamsStorage then ChamsStorage:Destroy() end
     ScreenGui:Destroy() 
 end)
 
@@ -359,4 +352,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("Đã chạy V6: Bổ sung bộ lọc Adaptive Aimbot thông minh chống góc khuất!")
+print("Đã vá lỗi kẹt Chams khi người chơi thoát game thành công!")
