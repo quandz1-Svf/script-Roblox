@@ -3,7 +3,6 @@ local chamsEnabled = false
 local teamCheckEnabled = false 
 local aimbotFOV = 150
 local panelVisible = true
-local lastRefreshTime = 0 -- Biến đếm thời gian để kích hoạt cơ chế Wake Up
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -19,13 +18,9 @@ local TargetGui = (pcall(function() return CoreGui.Name end) and CoreGui) or Pla
 -- UI Creation (Rainbow Themed)
 --------------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "RainbowV3Gui"
+ScreenGui.Name = "RainbowV6Gui"
 ScreenGui.ResetOnSpawn = false 
 ScreenGui.Parent = TargetGui
-
--- Tạo một Folder riêng biệt bên ngoài để quản lý Chams tập trung, không lo bị xóa khi reset nhân vật
-local ChamsContainer = Instance.new("Folder", ScreenGui)
-ChamsContainer.Name = "ChamsContainer"
 
 local MainPanel = Instance.new("Frame", ScreenGui)
 local MainCorner = Instance.new("UICorner", MainPanel)
@@ -53,7 +48,7 @@ MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 Title.Size = UDim2.new(1, 0, 0, 25)
 Title.Position = UDim2.new(0, 0, 0, 5)
-Title.Text = "RAINBOW V3"
+Title.Text = "RAINBOW V6"
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 16
 Title.BackgroundTransparency = 1
@@ -84,7 +79,7 @@ local function StyleRainbowButton(btn, pos, text)
 end
 
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
-local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Outline Chams: OFF")
+local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Box Chams: OFF")
 local TeamStroke = StyleRainbowButton(TeamBtn, 135, "Team Check: OFF") 
 local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
 
@@ -113,7 +108,7 @@ SnapLine.Thickness = 1
 SnapLine.Visible = false
 
 --------------------------------------------------------------------
--- TEAM CHECK
+-- TEAM CHECK & WALL CHECK
 --------------------------------------------------------------------
 local function checkTargetTeam(player)
     if not teamCheckEnabled then return true end 
@@ -127,16 +122,9 @@ local function checkTargetTeam(player)
         return player.TeamColor ~= LocalPlayer.TeamColor
     end
 
-    local pAttr = player:GetAttribute("Team") or player:GetAttribute("Faction") or player:GetAttribute("Side")
-    local localAttr = LocalPlayer:GetAttribute("Team") or LocalPlayer:GetAttribute("Faction") or LocalPlayer:GetAttribute("Side")
-    if pAttr and localAttr then
-        return pAttr ~= localAttr
-    end
-
     return true 
 end
 
--- Wall Check
 local function isVisible(targetPart)
     if not targetPart or not targetPart.Parent then return false end
     local origin = Camera.CFrame.Position
@@ -155,18 +143,77 @@ local function isVisible(targetPart)
 end
 
 --------------------------------------------------------------------
--- MAIN LOOP
+-- SURFACEGUI CHAMS GENERATOR (Cơ chế 6 mặt chống lỗi dịch chuyển)
+--------------------------------------------------------------------
+local faces = {"Front", "Back", "Left", "Right", "Top", "Bottom"}
+
+local function CreateSG(name, parent, face)
+    local SurfaceGui = Instance.new("SurfaceGui")
+    SurfaceGui.Name = name
+    SurfaceGui.Parent = parent
+    SurfaceGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    SurfaceGui.Face = Enum.NormalId[face]
+    SurfaceGui.LightInfluence = 0
+    SurfaceGui.ResetOnSpawn = false
+    SurfaceGui.AlwaysOnTop = true
+    
+    local Frame = Instance.new("Frame", SurfaceGui)
+    Frame.BackgroundColor3 = Color3.fromRGB(255, 0, 100) -- Màu Chams mặc định (Hồng cánh sen nổi bật)
+    Frame.BackgroundTransparency = 0.4 -- Độ mờ của Chams (Nhìn xuyên tường tốt hơn)
+    Frame.Size = UDim2.new(1, 0, 1, 0)
+    Frame.BorderSizePixel = 0
+    return SurfaceGui
+end
+
+local function clearChamsFromCharacter(char)
+    if not char then return end
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("MeshPart") or v:IsA("Part") then
+            for _, child in ipairs(v:GetChildren()) do
+                if child.Name == "Universal_SurfaceCham" then
+                    child:Destroy()
+                end
+            end
+        end
+    end
+end
+
+-- Vòng lặp quản lý luồng Chams (Chạy độc lập an toàn, 1 giây quét 1 lần giống code của bạn)
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if chamsEnabled then
+            for _, v in ipairs(Players:GetPlayers()) do
+                if v ~= LocalPlayer and v.Character and v.Character:IsDescendantOf(workspace) then
+                    local char = v.Character
+                    local head = char:FindFirstChild("Head")
+                    
+                    -- Kiểm tra Team Check và sự tồn tại của Chams cũ
+                    if checkTargetTeam(v) then
+                        if head and not head:FindFirstChild("Universal_SurfaceCham") then
+                            for _, part in ipairs(char:GetChildren()) do
+                                if part:IsA("MeshPart") or part:IsA("Part") then
+                                    for _, face in ipairs(faces) do
+                                        CreateSG("Universal_SurfaceCham", part, face)
+                                    end
+                                end
+                            end
+                        end
+                    else
+                        -- Nếu cùng đội (Khi bật Team Check), tự xóa Chams
+                        clearChamsFromCharacter(char)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+--------------------------------------------------------------------
+-- MAIN RENDERING LOOP (Chỉ xử lý Rainbow UI và Aimbot)
 --------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
-    local currentTime = tick()
-    local forceWakeUp = false
-
-    -- Cứ sau 1.5 giây, bật tín hiệu kích hoạt lại bộ dựng hình Chams
-    if currentTime - lastRefreshTime > 1.5 then
-        forceWakeUp = true
-        lastRefreshTime = currentTime
-    end
 
     if MainPanel.Visible then
         MainStroke.Color = rainbow
@@ -187,44 +234,7 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    --------------------------------------------------------------------
-    -- HỆ THỐNG QUẢN LÝ CHAMS V3 (BẬT HIỂU THỊ TOÀN DIỆN & CHỐNG KẸT RENDER)
-    --------------------------------------------------------------------
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            local char = p.Character
-            local hl = ChamsContainer:FindFirstChild("Chams_" .. p.Name)
-            
-            -- Điều kiện tối giản: Có cơ thể, nằm trong workspace là vẽ (Bỏ qua kiểm tra chỉ số máu lỗi của map)
-            local isCharacterValid = char and char:FindFirstChild("HumanoidRootPart") and char:IsDescendantOf(workspace)
-
-            if chamsEnabled and checkTargetTeam(p) and isCharacterValid then
-                -- Nếu Chams chưa có hoặc Adornee đang bị bám vào cơ thể cũ, tạo mới ngay
-                if not hl or hl.Adornee ~= char then
-                    if hl then hl:Destroy() end
-                    hl = Instance.new("Highlight")
-                    hl.Name = "Chams_" .. p.Name
-                    hl.FillTransparency = 1 
-                    hl.OutlineColor = Color3.fromRGB(255, 0, 100) 
-                    hl.OutlineTransparency = 0 
-                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
-                    hl.Adornee = char
-                    hl.Parent = ChamsContainer
-                end
-                
-                -- CƠ CHẾ WAKE UP: Chớp tắt định kỳ để buộc Roblox nhận diện lại luồng vẽ bị bỏ sót khi qua round
-                if forceWakeUp then
-                    hl.Enabled = false
-                    hl.Enabled = true
-                end
-            else
-                -- Nếu không thỏa mãn điều kiện (đã chết hẳn/ở ngoài map/cùng đội), xóa Chams
-                if hl then hl:Destroy() end
-            end
-        end
-    end
-
-    -- Logic Auto Aimbot (Cũng được tối ưu hóa đồng bộ)
+    -- Logic Auto Aimbot
     if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
@@ -278,19 +288,28 @@ end)
 
 ChamsBtn.MouseButton1Click:Connect(function()
     chamsEnabled = not chamsEnabled
-    ChamsBtn.Text = chamsEnabled and "Outline Chams: ON" or "Outline Chams: OFF"
+    ChamsBtn.Text = chamsEnabled and "Box Chams: ON" or "Box Chams: OFF"
     if not chamsEnabled then
-        ChamsContainer:ClearAllChildren()
+        -- Dọn sạch tất cả Chams khi nhấn nút Tắt
+        for _, p in ipairs(Players:GetPlayers()) do
+            clearChamsFromCharacter(p.Character)
+        end
     end
 end)
 
 TeamBtn.MouseButton1Click:Connect(function()
     teamCheckEnabled = not teamCheckEnabled
     TeamBtn.Text = teamCheckEnabled and "Team Check: ON" or "Team Check: OFF"
+    -- Quét dọn nhanh trạng thái Chams khi đổi chế độ Check Team
+    for _, p in ipairs(Players:GetPlayers()) do
+        clearChamsFromCharacter(p.Character)
+    end
 end)
 
 CloseBtn.MouseButton1Click:Connect(function() 
-    ChamsContainer:ClearAllChildren()
+    for _, p in ipairs(Players:GetPlayers()) do
+        clearChamsFromCharacter(p.Character)
+    end
     ScreenGui:Destroy() 
 end)
 
@@ -307,10 +326,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- Tự dọn dẹp khi người chơi rời phòng
-Players.PlayerRemoving:Connect(function(p)
-    local hl = ChamsContainer:FindFirstChild("Chams_" .. p.Name)
-    if hl then hl:Destroy() end
-end)
-
-print("Đã triển khai hệ thống Chams V3 chống lỗi Teleport và lỗi Máu ảo của Map thành công!")
+print("Đã tích hợp Box Chams SurfaceGui V6 siêu ổn định thành công!")
