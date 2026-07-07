@@ -1,6 +1,7 @@
 local aimbotEnabled = false
 local chamsEnabled = false
 local teamCheckEnabled = false 
+local aimTargetSetting = "Torso" -- Mặc định ban đầu là Thân ("Torso" hoặc "Head")
 local aimbotFOV = 150
 local panelVisible = true
 
@@ -15,7 +16,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local TargetGui = (pcall(function() return CoreGui.Name end) and CoreGui) or PlayerGui
 
 --------------------------------------------------------------------
--- UI Creation (Rainbow Themed)
+-- UI Creation (Rainbow Themed - Tăng kích thước để chứa nút mới)
 --------------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "RainbowV6Gui"
@@ -29,13 +30,14 @@ local MainStroke = Instance.new("UIStroke", MainPanel)
 local ToggleBtn = Instance.new("TextButton", MainPanel)
 local ChamsBtn = Instance.new("TextButton", MainPanel)
 local TeamBtn = Instance.new("TextButton", MainPanel) 
+local AimPartBtn = Instance.new("TextButton", MainPanel) -- Nút tùy chỉnh bộ phận Aim
 local FOVInput = Instance.new("TextBox", MainPanel)
 local CloseBtn = Instance.new("TextButton", MainPanel)
 local Title = Instance.new("TextLabel", MainPanel)
 local SubTitle = Instance.new("TextLabel", MainPanel)
 
--- Style Panel
-MainPanel.Size = UDim2.new(0, 200, 0, 215)
+-- Style Panel (Tăng chiều cao lên 255 để menu rộng rãi không bị đè chữ)
+MainPanel.Size = UDim2.new(0, 200, 0, 255)
 MainPanel.Position = UDim2.new(0.5, -100, 0.4, 0)
 MainPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainPanel.BorderSizePixel = 0
@@ -81,7 +83,8 @@ end
 local ToggleStroke = StyleRainbowButton(ToggleBtn, 55, "Aimbot: OFF")
 local ChamsStroke = StyleRainbowButton(ChamsBtn, 95, "Box Chams: OFF")
 local TeamStroke = StyleRainbowButton(TeamBtn, 135, "Team Check: OFF") 
-local FOVStroke = StyleRainbowButton(FOVInput, 175, tostring(aimbotFOV))
+local AimPartStroke = StyleRainbowButton(AimPartBtn, 175, "Aim Part: Torso") -- Vị trí nút Aim Part
+local FOVStroke = StyleRainbowButton(FOVInput, 215, tostring(aimbotFOV))     -- Đẩy ô nhập FOV xuống cuối
 
 FOVInput.PlaceholderText = "Nhập FOV..."
 FOVInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 100)
@@ -143,7 +146,7 @@ local function isVisible(targetPart)
 end
 
 --------------------------------------------------------------------
--- SURFACEGUI CHAMS GENERATOR (Cơ chế 6 mặt chống lỗi dịch chuyển)
+-- SURFACEGUI CHAMS GENERATOR (Giữ nguyên bản V6 siêu ổn định)
 --------------------------------------------------------------------
 local faces = {"Front", "Back", "Left", "Right", "Top", "Bottom"}
 
@@ -158,8 +161,8 @@ local function CreateSG(name, parent, face)
     SurfaceGui.AlwaysOnTop = true
     
     local Frame = Instance.new("Frame", SurfaceGui)
-    Frame.BackgroundColor3 = Color3.fromRGB(255, 0, 100) -- Màu Chams mặc định (Hồng cánh sen nổi bật)
-    Frame.BackgroundTransparency = 0.4 -- Độ mờ của Chams (Nhìn xuyên tường tốt hơn)
+    Frame.BackgroundColor3 = Color3.fromRGB(255, 0, 100) 
+    Frame.BackgroundTransparency = 0.4 
     Frame.Size = UDim2.new(1, 0, 1, 0)
     Frame.BorderSizePixel = 0
     return SurfaceGui
@@ -178,7 +181,6 @@ local function clearChamsFromCharacter(char)
     end
 end
 
--- Vòng lặp quản lý luồng Chams (Chạy độc lập an toàn, 1 giây quét 1 lần giống code của bạn)
 task.spawn(function()
     while true do
         task.wait(1)
@@ -188,7 +190,6 @@ task.spawn(function()
                     local char = v.Character
                     local head = char:FindFirstChild("Head")
                     
-                    -- Kiểm tra Team Check và sự tồn tại của Chams cũ
                     if checkTargetTeam(v) then
                         if head and not head:FindFirstChild("Universal_SurfaceCham") then
                             for _, part in ipairs(char:GetChildren()) do
@@ -200,7 +201,6 @@ task.spawn(function()
                             end
                         end
                     else
-                        -- Nếu cùng đội (Khi bật Team Check), tự xóa Chams
                         clearChamsFromCharacter(char)
                     end
                 end
@@ -210,7 +210,7 @@ task.spawn(function()
 end)
 
 --------------------------------------------------------------------
--- MAIN RENDERING LOOP (Chỉ xử lý Rainbow UI và Aimbot)
+-- MAIN RENDERING LOOP (Xử lý Rainbow UI và Adaptive Aimbot thông minh)
 --------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     local rainbow = Color3.fromHSV(tick() * 0.5 % 1, 1, 1)
@@ -225,6 +225,8 @@ RunService.RenderStepped:Connect(function()
         ChamsBtn.TextColor3 = rainbow
         TeamStroke.Color = rainbow
         TeamBtn.TextColor3 = rainbow
+        AimPartStroke.Color = rainbow
+        AimPartBtn.TextColor3 = rainbow
         FOVStroke.Color = rainbow
         FOVInput.TextColor3 = rainbow
     end
@@ -234,7 +236,7 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Color = rainbow
     SnapLine.Color = rainbow
 
-    -- Logic Auto Aimbot
+    -- Logic Adaptive Aimbot (Tự động đổi mục tiêu khi bị vật cản che khuất)
     if aimbotEnabled then
         local target = nil
         local dist = aimbotFOV
@@ -246,17 +248,39 @@ RunService.RenderStepped:Connect(function()
             end
 
             local char = p.Character
-            local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
             local isCharacterValid = char:FindFirstChild("HumanoidRootPart") and char:IsDescendantOf(workspace)
 
-            if targetPart and isCharacterValid then
-                local pos, screen = Camera:WorldToViewportPoint(targetPart.Position)
-                if screen then
-                    if isVisible(targetPart) then 
+            if isCharacterValid then
+                local headPart = char:FindFirstChild("Head")
+                local torsoPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
+                
+                local chosenPart = nil
+
+                -- XỬ LÝ ĐIỀU KIỆN THÔNG MINH TẠI ĐÂY
+                if aimTargetSetting == "Torso" then
+                    -- Nếu chọn Thân: Ưu tiên ngắm Thân trước, nếu Thân bị che thì kiểm tra Đầu
+                    if torsoPart and isVisible(torsoPart) then
+                        chosenPart = torsoPart
+                    elseif headPart and isVisible(headPart) then
+                        chosenPart = headPart
+                    end
+                elseif aimTargetSetting == "Head" then
+                    -- Nếu chọn Đầu: Ưu tiên ngắm Đầu trước, nếu Đầu bị che thì kiểm tra Thân
+                    if headPart and isVisible(headPart) then
+                        chosenPart = headPart
+                    elseif torsoPart and isVisible(torsoPart) then
+                        chosenPart = torsoPart
+                    end
+                end
+
+                -- Nếu tìm được bộ phận không bị che khuất phù hợp quy tắc
+                if chosenPart then
+                    local pos, screen = Camera:WorldToViewportPoint(chosenPart.Position)
+                    if screen then
                         local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
                         if mDist < dist then 
                             dist = mDist 
-                            target = targetPart 
+                            target = chosenPart 
                         end
                     end
                 end
@@ -290,7 +314,6 @@ ChamsBtn.MouseButton1Click:Connect(function()
     chamsEnabled = not chamsEnabled
     ChamsBtn.Text = chamsEnabled and "Box Chams: ON" or "Box Chams: OFF"
     if not chamsEnabled then
-        -- Dọn sạch tất cả Chams khi nhấn nút Tắt
         for _, p in ipairs(Players:GetPlayers()) do
             clearChamsFromCharacter(p.Character)
         end
@@ -300,9 +323,19 @@ end)
 TeamBtn.MouseButton1Click:Connect(function()
     teamCheckEnabled = not teamCheckEnabled
     TeamBtn.Text = teamCheckEnabled and "Team Check: ON" or "Team Check: OFF"
-    -- Quét dọn nhanh trạng thái Chams khi đổi chế độ Check Team
     for _, p in ipairs(Players:GetPlayers()) do
         clearChamsFromCharacter(p.Character)
+    end
+end)
+
+-- Sự kiện nhấn nút chuyển đổi giữa Đầu và Thân
+AimPartBtn.MouseButton1Click:Connect(function()
+    if aimTargetSetting == "Torso" then
+        aimTargetSetting = "Head"
+        AimPartBtn.Text = "Aim Part: Head"
+    else
+        aimTargetSetting = "Torso"
+        AimPartBtn.Text = "Aim Part: Torso"
     end
 end)
 
@@ -326,4 +359,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("Đã tích hợp Box Chams SurfaceGui V6 siêu ổn định thành công!")
+print("Đã chạy V6: Bổ sung bộ lọc Adaptive Aimbot thông minh chống góc khuất!")
