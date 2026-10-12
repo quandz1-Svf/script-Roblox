@@ -1,142 +1,211 @@
--- Скрипт для поиска уязвимости начисления денег в игре Roblox
--- Анализирует SpinRequest и другие Remote-объекты
+-- Скрипт автоматического перемещения между сиденьями TreoTien и TreoTienVIP
+-- Приоритет: TreoTienVIP
 -- Автор: palofsc
--- Версия: 2.0
+-- Версия: 1.0
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
--- Ожидание Remote2
-local Remote2 = ReplicatedStorage:WaitForChild("Remote2", 10)
-if not Remote2 then
-    warn("Remote2 не найден.")
-    return
-end
-local RandomRemote = Remote2:WaitForChild("RandomRemote", 10)
-if not RandomRemote then
-    warn("RandomRemote не найден.")
-    return
-end
-local SpinRequest = RandomRemote:WaitForChild("SpinRequest", 10)
-if not SpinRequest then
-    warn("SpinRequest не найден.")
-    return
-end
+-- ===== НАСТРОЙКИ =====
+local enabled = false
+local delayMs = 500 -- задержка между сиденьями в миллисекундах
+local currentIndex = 1
+local seatsList = {}
+local isSitting = false
+local lastSeat = nil
 
--- Получение текущего баланса Cash
-local function getCash()
-    local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
-    if leaderstats then
-        local cash = leaderstats:FindFirstChild("Cash")
-        if cash then
-            return cash.Value
-        end
-    end
-    return nil
-end
-
--- Сохранение исходного баланса
-local startCash = getCash()
-print("Начальный баланс Cash: " .. tostring(startCash))
-
--- Функция вызова SpinRequest с аргументами
-local function fireSpin(...)
-    local args = {...}
-    if SpinRequest:IsA("RemoteEvent") then
-        SpinRequest:FireServer(unpack(args))
-    elseif SpinRequest:IsA("RemoteFunction") then
-        SpinRequest:InvokeServer(unpack(args))
-    end
-end
-
--- Перебор вариантов аргументов для SpinRequest
-local spinArgs = {
-    {-15},                          -- отрицательная ставка
-    {-15000000},                    -- отрицательная большая сумма
-    {15, true},                     -- ставка + флаг
-    {-15, true},                    -- отрицательная ставка + флаг
-    {Bet = -15},                    -- таблица с отрицательной ставкой
-    {Amount = -15},                 -- таблица с отрицательной суммой
-    {Value = -15},                  -- таблица со значением
-    {"Spin", -15},                  -- строка + отрицательная ставка
-    {"spin", -15},                  -- строка + отрицательная ставка
-    {"Cash", -15},                  -- Cash + отрицательная сумма
-    {"add", "Cash", 15000000},      -- add Cash 15M
-    {"give", "Cash", 15000000},     -- give Cash 15M
-    {"reward", "Cash", 15000000},   -- reward Cash 15M
-}
-
--- Функция сканирования всех Remote-объектов
-local function scanRemotes()
-    local remotes = {}
-    local function scan(container, path)
-        for _, obj in ipairs(container:GetChildren()) do
-            local objPath = path .. "." .. obj.Name
-            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                table.insert(remotes, {Object = obj, Path = objPath, Name = obj.Name, ClassName = obj.ClassName})
+-- ===== ПОИСК СИДЕНИЙ =====
+local function findSeats()
+    local vipSeats = {}
+    local normalSeats = {}
+    
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        -- Проверяем, является ли объект сиденьем (класс Seat или VehicleSeat)
+        local seat = nil
+        if obj:IsA("Seat") or obj:IsA("VehicleSeat") then
+            seat = obj
+        elseif obj:IsA("BasePart") then
+            -- Если это часть, ищем внутри неё Seat
+            local childSeat = obj:FindFirstChildWhichIsA("Seat") or obj:FindFirstChildWhichIsA("VehicleSeat")
+            if childSeat then
+                seat = childSeat
             end
-            if obj:IsA("Folder") or obj:IsA("Model") or obj:IsA("ScreenGui") then
-                scan(obj, objPath)
+        end
+        
+        if seat then
+            local name = seat.Name
+            if name == "TreoTienVIP" then
+                table.insert(vipSeats, seat)
+            elseif name == "TreoTien" then
+                table.insert(normalSeats, seat)
             end
         end
     end
-    scan(ReplicatedStorage, "ReplicatedStorage")
-    scan(workspace, "Workspace")
-    scan(Players, "Players")
-    return remotes
+    
+    -- Объединяем: сначала VIP, потом обычные
+    local result = {}
+    for _, s in ipairs(vipSeats) do table.insert(result, s) end
+    for _, s in ipairs(normalSeats) do table.insert(result, s) end
+    return result
 end
 
--- Попытка вызова других Remote-объектов с денежными аргументами
-local function tryOtherRemotes()
-    local remotes = scanRemotes()
-    for _, remote in ipairs(remotes) do
-        local lowerName = remote.Name:lower()
-        if lowerName:find("cash") or lowerName:find("money") or lowerName:find("reward") or lowerName:find("claim") or lowerName:find("daily") or lowerName:find("gift") or lowerName:find("bonus") then
-            print("Попытка вызова: " .. remote.Path)
-            local obj = remote.Object
-            local success, err = pcall(function()
-                if obj:IsA("RemoteEvent") then
-                    obj:FireServer(15000000)
-                    obj:FireServer("Cash", 15000000)
-                    obj:FireServer(LocalPlayer, 15000000)
-                    obj:FireServer("add", "Cash", 15000000)
-                elseif obj:IsA("RemoteFunction") then
-                    obj:InvokeServer(15000000)
-                    obj:InvokeServer("Cash", 15000000)
-                    obj:InvokeServer(LocalPlayer, 15000000)
-                    obj:InvokeServer("add", "Cash", 15000000)
+-- ===== ОБНОВЛЕНИЕ СПИСКА СИДЕНИЙ =====
+local function refreshSeats()
+    seatsList = findSeats()
+    if #seatsList == 0 then
+        warn("Сиденья TreoTien/TreoTienVIP не найдены!")
+    else
+        print("Найдено сидений: " .. #seatsList)
+    end
+end
+
+-- ===== ФУНКЦИЯ ПЕРЕСАДКИ =====
+local function sitOnSeat(seat)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid then return end
+    
+    -- Встаём с текущего сиденья
+    humanoid.Sit = false
+    wait(0.1)
+    
+    -- Телепортируемся к сиденью и садимся
+    if seat then
+        -- Используем метод Sit, который телепортирует и сажает
+        seat:Sit(humanoid)
+        lastSeat = seat
+        isSitting = true
+    end
+end
+
+-- ===== ОСНОВНОЙ ЦИКЛ =====
+local function mainLoop()
+    while enabled do
+        if #seatsList == 0 then
+            refreshSeats()
+            wait(1)
+        else
+            local seat = seatsList[currentIndex]
+            if seat and seat.Parent then
+                sitOnSeat(seat)
+                -- Ожидание указанной задержки
+                wait(delayMs / 1000)
+                -- Переход к следующему сиденью
+                currentIndex = currentIndex + 1
+                if currentIndex > #seatsList then
+                    currentIndex = 1
                 end
-            end)
-            if not success then
-                print("Ошибка: " .. tostring(err))
+            else
+                -- Если сиденье исчезло, обновляем список
+                refreshSeats()
+                currentIndex = 1
+                wait(0.5)
             end
         end
+        wait(0.05)
     end
 end
 
--- Основной цикл
-while true do
-    -- Попытка эксплуатировать SpinRequest отрицательными ставками
-    for _, args in ipairs(spinArgs) do
-        fireSpin(unpack(args))
-        wait(0.1)
-        local currentCash = getCash()
-        if currentCash and startCash and currentCash > startCash then
-            print("УСПЕХ! Баланс увеличен с " .. startCash .. " до " .. currentCash)
-            return
+-- ===== GUI =====
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SeatTeleportGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 220, 0, 120)
+Frame.Position = UDim2.new(0.5, -110, 0.5, -60)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Авто-сиденья"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.Parent = Frame
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0.8, 0, 0, 30)
+ToggleBtn.Position = UDim2.new(0.1, 0, 0, 35)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleBtn.Text = "ВЫКЛ"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.GothamSemibold
+ToggleBtn.TextSize = 14
+ToggleBtn.Parent = Frame
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 4)
+ToggleCorner.Parent = ToggleBtn
+
+local DelayLabel = Instance.new("TextLabel")
+DelayLabel.Size = UDim2.new(0.5, 0, 0, 20)
+DelayLabel.Position = UDim2.new(0.05, 0, 0, 75)
+DelayLabel.BackgroundTransparency = 1
+DelayLabel.Text = "Задержка (мс):"
+DelayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+DelayLabel.Font = Enum.Font.Gotham
+DelayLabel.TextSize = 12
+DelayLabel.TextXAlignment = Enum.TextXAlignment.Left
+DelayLabel.Parent = Frame
+
+local DelayInput = Instance.new("TextBox")
+DelayInput.Size = UDim2.new(0.3, 0, 0, 24)
+DelayInput.Position = UDim2.new(0.6, 0, 0, 73)
+DelayInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+DelayInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+DelayInput.Font = Enum.Font.Gotham
+DelayInput.TextSize = 12
+DelayInput.Text = tostring(delayMs)
+DelayInput.Parent = Frame
+
+local DelayCorner = Instance.new("UICorner")
+DelayCorner.CornerRadius = UDim.new(0, 4)
+DelayCorner.Parent = DelayInput
+
+-- ===== ОБРАБОТЧИКИ =====
+ToggleBtn.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    if enabled then
+        ToggleBtn.Text = "ВКЛ"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        refreshSeats()
+        currentIndex = 1
+        coroutine.wrap(mainLoop)()
+    else
+        ToggleBtn.Text = "ВЫКЛ"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        -- Встаём с сиденья при выключении
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+            if humanoid then humanoid.Sit = false end
         end
     end
-    
-    -- Попытка других Remote-объектов
-    tryOtherRemotes()
-    wait(1)
-    
-    -- Проверка баланса
-    local currentCash = getCash()
-    if currentCash and startCash and currentCash > startCash then
-        print("УСПЕХ! Баланс увеличен с " .. startCash .. " до " .. currentCash)
-        return
+end)
+
+DelayInput.FocusLost:Connect(function()
+    local num = tonumber(DelayInput.Text)
+    if num and num > 0 then
+        delayMs = num
+    else
+        DelayInput.Text = tostring(delayMs)
     end
-end
+end)
+
+-- Первоначальный поиск сидений
+refreshSeats()
