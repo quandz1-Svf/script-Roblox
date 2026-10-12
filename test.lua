@@ -1,6 +1,5 @@
--- Скрипт авто-перемещения между сиденьями (v2.0)
--- Поддержка: TreoTien / TreoTienVIP (регистронезависимый поиск)
--- Режим 2: выбор модели по координатам XYZ
+-- Скрипт авто-перемещения между сиденьями (v2.1)
+-- Добавлено: принудительное вставание после каждого сиденья
 -- Автор: palofsc
 
 local Players = game:GetService("Players")
@@ -13,9 +12,24 @@ local enabled = false
 local delayMs = 500
 local currentIndex = 1
 local mode = "seats" -- "seats" или "coords"
-local coordTargets = {} -- список {name, position}
+local coordTargets = {}
 local selectingMode = false
-local selectedParts = {}
+
+-- ===== ФУНКЦИЯ ПРИНУДИТЕЛЬНОГО ВСТАВАНИЯ =====
+local function forceStandUp()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid then return end
+    if humanoid.Sit then
+        humanoid.Sit = false
+        humanoid.Jump = true
+        local start = tick()
+        while humanoid.Sit and tick() - start < 0.5 do
+            task.wait(0.05)
+        end
+    end
+end
 
 -- ===== ФУНКЦИЯ: РЕГИСТРОНЕЗАВИСИМЫЙ ПОИСК СИДЕНИЙ =====
 local function isSeatName(name)
@@ -26,23 +40,19 @@ end
 local function findSeats()
     local vipSeats = {}
     local normalSeats = {}
-    
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if isSeatName(obj.Name) then
             local seatObj = obj
-            -- Если это модель, ищем внутри Seat
             if obj:IsA("Model") then
                 local s = obj:FindFirstChildWhichIsA("Seat") or obj:FindFirstChildWhichIsA("VehicleSeat")
                 if s then seatObj = s end
             end
-            -- Также ищем у детей
             local finalSeat = nil
             if seatObj:IsA("Seat") or seatObj:IsA("VehicleSeat") then
                 finalSeat = seatObj
             else
                 finalSeat = seatObj:FindFirstChildWhichIsA("Seat") or seatObj:FindFirstChildWhichIsA("VehicleSeat")
             end
-            
             if finalSeat then
                 if obj.Name:lower() == "treotienvip" then
                     table.insert(vipSeats, finalSeat)
@@ -52,7 +62,6 @@ local function findSeats()
             end
         end
     end
-    
     local result = {}
     for _, s in ipairs(vipSeats) do table.insert(result, s) end
     for _, s in ipairs(normalSeats) do table.insert(result, s) end
@@ -70,7 +79,7 @@ local function refreshSeats()
     return #seatsList
 end
 
--- ===== ФУНКЦИЯ ПОЛУЧЕНИЯ ПОЗИЦИИ МОДЕЛИ =====
+-- ===== ПОЛУЧЕНИЕ ПОЗИЦИИ МОДЕЛИ =====
 local function getModelPosition(model)
     if not model then return nil end
     if model:IsA("Model") then
@@ -84,7 +93,7 @@ local function getModelPosition(model)
     return nil
 end
 
--- ===== ФУНКЦИЯ ПЕРЕСАДКИ НА СИДЕНЬЕ =====
+-- ===== ПЕРЕСАДКА НА СИДЕНЬЕ =====
 local function sitOnSeat(seat)
     local char = LocalPlayer.Character
     if not char then return end
@@ -97,7 +106,7 @@ local function sitOnSeat(seat)
     end
 end
 
--- ===== ФУНКЦИЯ ТЕЛЕПОРТА К КООРДИНАТАМ =====
+-- ===== ТЕЛЕПОРТ К КООРДИНАТАМ =====
 local function teleportToPosition(pos)
     local char = LocalPlayer.Character
     if not char then return end
@@ -110,6 +119,10 @@ end
 -- ===== ОСНОВНОЙ ЦИКЛ =====
 local function mainLoop()
     while enabled do
+        -- Принудительно встаём перед любым действием
+        forceStandUp()
+        task.wait(0.1)
+
         if mode == "seats" then
             if #seatsList == 0 then
                 refreshSeats()
@@ -118,7 +131,18 @@ local function mainLoop()
                 local seat = seatsList[currentIndex]
                 if seat and seat.Parent then
                     sitOnSeat(seat)
+                    -- Ждём, пока персонаж сядет
+                    local char = LocalPlayer.Character
+                    local humanoid = char and char:FindFirstChildWhichIsA("Humanoid")
+                    if humanoid then
+                        local sitStart = tick()
+                        while not humanoid.Sit and tick() - sitStart < 0.5 do
+                            task.wait(0.05)
+                        end
+                    end
                     task.wait(delayMs / 1000)
+                    -- Встаём перед переходом к следующему
+                    forceStandUp()
                     currentIndex = currentIndex + 1
                     if currentIndex > #seatsList then currentIndex = 1 end
                 else
@@ -131,14 +155,12 @@ local function mainLoop()
             if #coordTargets == 0 then
                 task.wait(0.3)
             elseif #coordTargets == 1 then
-                -- Один таргет: телепорт → отход → телепорт обратно
                 local t = coordTargets[1]
                 teleportToPosition(t.position)
                 task.wait(delayMs / 1000)
                 teleportToPosition(t.position + Vector3.new(0, 0, 5))
                 task.wait(delayMs / 1000)
             else
-                -- >=2 таргетов: переключение между ними
                 local t = coordTargets[currentIndex]
                 if t then
                     teleportToPosition(t.position)
@@ -172,13 +194,12 @@ Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 8)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 30)
 Title.BackgroundTransparency = 1
-Title.Text = "Авто-перемещение v2.0"
+Title.Text = "Авто-перемещение v2.1"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
 Title.Parent = Frame
 
--- Кнопка ВКЛ/ВЫКЛ
 local ToggleBtn = Instance.new("TextButton")
 ToggleBtn.Size = UDim2.new(0.9, 0, 0, 30)
 ToggleBtn.Position = UDim2.new(0.05, 0, 0, 35)
@@ -190,7 +211,6 @@ ToggleBtn.TextSize = 13
 ToggleBtn.Parent = Frame
 Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 4)
 
--- Кнопка режима сидений
 local Mode1Btn = Instance.new("TextButton")
 Mode1Btn.Size = UDim2.new(0.9, 0, 0, 26)
 Mode1Btn.Position = UDim2.new(0.05, 0, 0, 72)
@@ -202,7 +222,6 @@ Mode1Btn.TextSize = 12
 Mode1Btn.Parent = Frame
 Instance.new("UICorner", Mode1Btn).CornerRadius = UDim.new(0, 4)
 
--- Кнопка режима координат
 local Mode2Btn = Instance.new("TextButton")
 Mode2Btn.Size = UDim2.new(0.9, 0, 0, 26)
 Mode2Btn.Position = UDim2.new(0.05, 0, 0, 102)
@@ -214,7 +233,6 @@ Mode2Btn.TextSize = 12
 Mode2Btn.Parent = Frame
 Instance.new("UICorner", Mode2Btn).CornerRadius = UDim.new(0, 4)
 
--- Кнопка добавления текущей позиции
 local AddPosBtn = Instance.new("TextButton")
 AddPosBtn.Size = UDim2.new(0.9, 0, 0, 26)
 AddPosBtn.Position = UDim2.new(0.05, 0, 0, 132)
@@ -226,7 +244,6 @@ AddPosBtn.TextSize = 12
 AddPosBtn.Parent = Frame
 Instance.new("UICorner", AddPosBtn).CornerRadius = UDim.new(0, 4)
 
--- Кнопка выбора модели кликом
 local PickBtn = Instance.new("TextButton")
 PickBtn.Size = UDim2.new(0.9, 0, 0, 26)
 PickBtn.Position = UDim2.new(0.05, 0, 0, 162)
@@ -238,7 +255,6 @@ PickBtn.TextSize = 12
 PickBtn.Parent = Frame
 Instance.new("UICorner", PickBtn).CornerRadius = UDim.new(0, 4)
 
--- Кнопка очистки
 local ClearBtn = Instance.new("TextButton")
 ClearBtn.Size = UDim2.new(0.9, 0, 0, 26)
 ClearBtn.Position = UDim2.new(0.05, 0, 0, 192)
@@ -250,7 +266,6 @@ ClearBtn.TextSize = 12
 ClearBtn.Parent = Frame
 Instance.new("UICorner", ClearBtn).CornerRadius = UDim.new(0, 4)
 
--- Задержка
 local DelayLabel = Instance.new("TextLabel")
 DelayLabel.Size = UDim2.new(0.5, 0, 0, 20)
 DelayLabel.Position = UDim2.new(0.05, 0, 0, 225)
@@ -273,7 +288,6 @@ DelayInput.Text = tostring(delayMs)
 DelayInput.Parent = Frame
 Instance.new("UICorner", DelayInput).CornerRadius = UDim.new(0, 4)
 
--- Список целей
 local ListLabel = Instance.new("TextLabel")
 ListLabel.Size = UDim2.new(0.9, 0, 0, 0)
 ListLabel.Position = UDim2.new(0.05, 0, 0, 250)
@@ -285,7 +299,6 @@ ListLabel.TextSize = 10
 ListLabel.TextXAlignment = Enum.TextXAlignment.Left
 ListLabel.Parent = Frame
 
--- ===== ОБНОВЛЕНИЕ СПИСКА В GUI =====
 local function updateListDisplay()
     local text = ""
     if mode == "coords" then
@@ -300,7 +313,6 @@ local function updateListDisplay()
     ListLabel.Text = text
 end
 
--- ===== ОБРАБОТЧИКИ =====
 ToggleBtn.MouseButton1Click:Connect(function()
     enabled = not enabled
     if enabled then
@@ -312,11 +324,7 @@ ToggleBtn.MouseButton1Click:Connect(function()
     else
         ToggleBtn.Text = "ВЫКЛ"
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        local char = LocalPlayer.Character
-        if char then
-            local h = char:FindFirstChildWhichIsA("Humanoid")
-            if h then h.Sit = false end
-        end
+        forceStandUp()
     end
 end)
 
@@ -357,7 +365,6 @@ ClearBtn.MouseButton1Click:Connect(function()
     print("[*] Список координат очищен")
 end)
 
--- ===== ВЫБОР МОДЕЛИ КЛИКОМ ПО ЭКРАНУ =====
 local function selectModelByClick()
     selectingMode = true
     PickBtn.Text = "Кликните по модели..."
@@ -373,7 +380,6 @@ local function selectModelByClick()
             local result = workspace:Raycast(ray.Origin, ray.Direction * 500, params)
             if result and result.Instance then
                 local hit = result.Instance
-                -- Ищем модель-родителя
                 local model = hit:FindFirstAncestorOfClass("Model") or hit
                 local pos = getModelPosition(model)
                 if pos then
@@ -398,7 +404,6 @@ end
 
 PickBtn.MouseButton1Click:Connect(selectModelByClick)
 
--- ===== ОБНОВЛЕНИЕ ПОЗИЦИЙ ЦЕЛЕЙ (если модель движется) =====
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -411,7 +416,6 @@ task.spawn(function()
     end
 end)
 
--- Первоначальный поиск
 refreshSeats()
 updateListDisplay()
 print("[GUI] Загружено. Режим: " .. mode)
